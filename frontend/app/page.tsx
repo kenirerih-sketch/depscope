@@ -674,6 +674,17 @@ export default function Home() {
               title="Add DepScope to your AI agent"
               description="One line in your config. Your agent saves tokens, your users save energy, you ship safer code."
             >
+              {/* Remote MCP highlight — always visible, before tabs */}
+              <div className="mb-4 border border-[var(--accent)]/30 bg-[var(--accent)]/5 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[10px] font-mono uppercase tracking-wider px-1.5 py-0.5 rounded bg-[var(--accent)] text-black">New</span>
+                  <span className="text-sm font-semibold text-[var(--text)]">Remote MCP — zero install</span>
+                </div>
+                <p className="text-sm text-[var(--text-dim)] mb-2">
+                  Claude Desktop / Cursor / Windsurf (recent versions) can connect with just a URL — no <code className="text-[var(--accent)] font-mono text-xs">npm install -g</code> needed. 20 tools auto-registered.
+                </p>
+                <pre className="bg-[var(--bg-soft)] border border-[var(--border)] rounded p-3 text-xs font-mono overflow-x-auto">{`{ "mcpServers": { "depscope": { "url": "https://mcp.depscope.dev/mcp" } } }`}</pre>
+              </div>
               <SetupSnippets />
             </Section>
 

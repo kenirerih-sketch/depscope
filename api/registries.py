@@ -201,11 +201,13 @@ async def fetch_go(name: str) -> dict | None:
     elif name.startswith("golang.org/x/"):
         repo_url = f"https://github.com/golang/{name.split('/')[-1]}"
 
-    # Enrich from deps.dev: license (per-version) + project stars (downloads proxy)
+    # Enrich from deps.dev (license + stars) and GitHub (contributors count)
+    import os
     from urllib.parse import quote
     license = ""
     stars = 0
     description = ""
+    contributors = 0
     dev_encoded = quote(name, safe="")
     try:
         async with aiohttp.ClientSession() as session:
@@ -229,6 +231,31 @@ async def fetch_go(name: str) -> dict | None:
                     proj = await r.json()
                     stars = int(proj.get("starsCount") or 0)
                     description = proj.get("description") or ""
+            # GitHub contributors count (proxy for maintainers on github.com/* modules)
+            if name.startswith("github.com/"):
+                parts = name.split("/")
+                if len(parts) >= 3:
+                    owner, repo = parts[1], parts[2]
+                    gh_tok = os.environ.get("GH_TOKEN", "")
+                    gh_headers = {"Accept": "application/vnd.github+json"}
+                    if gh_tok:
+                        gh_headers["Authorization"] = f"Bearer {gh_tok}"
+                    try:
+                        async with session.get(
+                            f"https://api.github.com/repos/{owner}/{repo}/contributors?per_page=1&anon=1",
+                            headers=gh_headers,
+                            timeout=aiohttp.ClientTimeout(total=8),
+                        ) as gr:
+                            link = gr.headers.get("Link", "")
+                            import re as _re
+                            m = _re.search(r'<[^>]*[?&]page=(\d+)[^>]*>;\s*rel="last"', link)
+                            if m:
+                                contributors = int(m.group(1))
+                            elif gr.status == 200:
+                                data = await gr.json()
+                                contributors = len(data) if isinstance(data, list) else 0
+                    except Exception:
+                        pass
     except Exception:
         pass
 
@@ -242,7 +269,7 @@ async def fetch_go(name: str) -> dict | None:
         "repository": repo_url,
         # Go has no centralized download telemetry; use deps.dev stars as a popularity proxy
         "downloads_weekly": stars,
-        "maintainers_count": 0,
+        "maintainers_count": contributors,
         "deprecated": False,
         "deprecated_message": None,
         "first_published": None,
