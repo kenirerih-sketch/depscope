@@ -132,7 +132,7 @@ Before any install: curl depscope.dev/api/check/{eco}/{pkg} — no auth, free
 
 **ChatGPT** — search "DepScope" in the GPT Store.
 
-**MCP (12 tools)** — `npm install -g depscope-mcp` and add to your MCP config. Tools: `check_package`, `get_latest_version`, `package_exists`, `search_packages`, `find_alternatives`, `compare_packages`, `get_vulnerabilities`, `scan_project`, `get_health_score`, `resolve_error`, `check_compat`, `get_bugs`.
+**MCP (20 tools)** — zero install: add `{"mcpServers":{"depscope":{"url":"https://mcp.depscope.dev/mcp"}}}` to your Claude Desktop / Cursor / Windsurf config. Or local stdio: `npm install -g depscope-mcp`. Tools cover: package health, vulnerabilities, malicious/typosquat detection, OpenSSF Scorecard, maintainer trust, quality signals, provenance, alternatives, breaking changes, known bugs, compatibility, error resolution.
 
 ## Endpoints
 
@@ -225,11 +225,12 @@ Running this once for everyone is cheaper than having millions of AI agents do i
 - **Cache TTL**: 1 hour for metadata, 6 hours for vulnerabilities
 - **Coverage**: 14,700+ packages pre-indexed across 17 ecosystems, any package fetched on-demand
 - **Vulnerabilities**: 402 tracked (latest-version-filtered, not historical noise)
-- **MCP**: 12 tools covering all three verticals
+- **MCP**: 20 tools covering all three verticals (remote + stdio transports)
 
 ## Ecosystem
 
-- **MCP Server** (12 tools): [depscope-mcp](https://www.npmjs.com/package/depscope-mcp) — `npm install -g depscope-mcp`
+- **MCP Remote** (20 tools, zero install): `https://mcp.depscope.dev/mcp`
+- **MCP Server** (20 tools, stdio): [depscope-mcp](https://www.npmjs.com/package/depscope-mcp) — `npm install -g depscope-mcp`
 - **ChatGPT GPT**: search "DepScope" in GPT Store
 - **RapidAPI**: [hub listing](https://rapidapi.com/depscope/api/depscope)
 - **OpenAPI Spec**: [depscope.dev/openapi.json](https://depscope.dev/openapi.json)

@@ -1,6 +1,6 @@
 ---
 name: DepScope Platform
-description: depscope.dev — Package Intelligence for AI Agents. VM 140, FastAPI+Next.js 16+PostgreSQL 17. API free, 17 ecosistemi (npm/pypi/cargo/go/maven/nuget/rubygems+10 altri), 14,700+ pacchetti, 402 vulnerabilita, 12 MCP tools, 3 verticali (package health + error->fix + compat matrix). Save tokens, save energy, ship safer code.
+description: depscope.dev — Package Intelligence for AI Agents. VM 140, FastAPI+Next.js 16+PostgreSQL 17. API free, 17 ecosistemi (npm/pypi/cargo/go/maven/nuget/rubygems+10 altri), 14,700+ pacchetti, 402 vulnerabilita, 20 MCP tools, 3 verticali (package health + error->fix + compat matrix). Save tokens, save energy, ship safer code.
 type: project
 originSessionId: 21209a7e-7e4e-46e5-aa87-f1f2b0a39c02
 ---
@@ -210,5 +210,5 @@ originSessionId: 21209a7e-7e4e-46e5-aa87-f1f2b0a39c02
 - **Redis flush**: `redis-cli FLUSHALL` per invalidare cache dopo modifiche al backend
 - **Alternatives curate: tabella **alternatives** (177 pair curate: 156 real + 21 builtin su npm/pypi/cargo) — dict legacy in main.py conservato come fallback, non piu letto
 
-**Why:** Il mercato degli agenti AI coding esplode. Chi fornisce "intelligence" sulle dipendenze come servizio gratuito accumula dati e posizione. Nessun competitor fa tutto insieme su 17 ecosistemi (package health + error->fix + compat matrix + 12 MCP tools). Posizionamento: save tokens, save energy, ship safer code.
+**Why:** Il mercato degli agenti AI coding esplode. Chi fornisce "intelligence" sulle dipendenze come servizio gratuito accumula dati e posizione. Nessun competitor fa tutto insieme su 17 ecosistemi (package health + error->fix + compat matrix + 20 MCP tools). Posizionamento: save tokens, save energy, ship safer code.
 **How to apply:** Sempre lavorare su VM 140 via SSH deploy@10.10.0.140. Backend in api/, frontend in frontend/. Test con curl dopo ogni modifica.
