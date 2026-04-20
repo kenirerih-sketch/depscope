@@ -327,10 +327,24 @@ export default function Home() {
             <br />
             <span className="text-[var(--accent)]">Ship safer code.</span>
           </h1>
-          <p className="text-sm md:text-base text-[var(--text-dim)] mb-8 max-w-xl mx-auto leading-relaxed">
+          <p className="text-sm md:text-base text-[var(--text-dim)] mb-4 max-w-xl mx-auto leading-relaxed">
             One API for package health across {stats?.ecosystems?.length || 17} ecosystems.
             Cached for every AI agent. Free, no auth.
           </p>
+          <div className="flex flex-wrap justify-center gap-2 mb-8 text-xs font-mono">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[var(--accent)]/40 bg-[var(--accent)]/5 text-[var(--accent)]">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              −74% tokens
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[var(--border)] bg-[var(--bg-soft)] text-[var(--text-dim)]">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 22c1.5-6 6-9 12-9"/></svg>
+              saves energy
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-[var(--border)] bg-[var(--bg-soft)] text-[var(--text-dim)]">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/></svg>
+              safer code
+            </span>
+          </div>
 
           {/* Search */}
           <div className="max-w-2xl mx-auto mb-4">
