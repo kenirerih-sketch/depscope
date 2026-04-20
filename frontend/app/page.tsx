@@ -376,7 +376,7 @@ export default function Home() {
 
           {/* MCP tools banner */}
           <div className="mt-6 flex flex-wrap justify-center items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-faded)] font-mono">
-            <span className="tabular-nums"><span className="text-[var(--text-dim)]">{stats?.mcp_tools ?? 12}</span> MCP tools</span>
+            <span className="tabular-nums"><span className="text-[var(--text-dim)]">{stats?.mcp_tools ?? 20}</span> MCP tools</span>
             <span>·</span>
             <span className="tabular-nums"><span className="text-[var(--text-dim)]">{stats?.ecosystems?.length || 17}</span> ecosystems</span>
             <span>·</span>
@@ -660,7 +660,7 @@ export default function Home() {
                   </div>
                   <div className="p-5">
                     <Stat
-                      value={stats?.mcp_tools ?? 12}
+                      value={stats?.mcp_tools ?? 20}
                       label="MCP tools"
                       color="var(--accent)"
                     />

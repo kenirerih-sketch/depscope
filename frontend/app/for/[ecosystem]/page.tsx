@@ -109,7 +109,14 @@ export default async function EcosystemLanding({ params }: { params: Promise<{ e
             <CardBody>
               <p className="text-sm text-[var(--text-dim)] mb-2">
                 <Badge variant="neutral">Claude Desktop / Cursor</Badge> &nbsp;
-                MCP server on npm:
+                Remote MCP (zero install):
+              </p>
+              <pre className="text-xs font-mono bg-[var(--bg-soft)] p-3 rounded">
+{`{ "mcpServers": { "depscope": { "url": "https://mcp.depscope.dev/mcp" } } }`}
+              </pre>
+              <p className="text-sm text-[var(--text-dim)] mb-2 mt-4">
+                <Badge variant="neutral">Legacy stdio</Badge> &nbsp;
+                Local MCP server on npm:
               </p>
               <pre className="text-xs font-mono bg-[var(--bg-soft)] p-3 rounded">
 {`npm install -g depscope-mcp`}

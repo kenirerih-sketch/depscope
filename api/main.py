@@ -1894,6 +1894,7 @@ async def get_stats():
         "ecosystem_counts": eco_counts,
         "version": VERSION,
         "pricing": "free",
+        "mcp_tools": 20,
     }
 
 

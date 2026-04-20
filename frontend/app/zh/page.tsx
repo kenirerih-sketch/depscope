@@ -513,7 +513,7 @@ export default function ZhHome() {
               </div>
               <div className="card p-5 text-center">
                 <div className="text-xl md:text-3xl font-bold text-[var(--orange, #f97316)]">
-                  {stats?.mcp_tools ?? 12}
+                  {stats?.mcp_tools ?? 20}
                 </div>
                 <div className="text-xs text-[var(--text-dim)] mt-1">MCP 工具</div>
               </div>

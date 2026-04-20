@@ -30,10 +30,23 @@ const SNIPPETS: Snippet[] = [
 使用返回的 health/CVE/deprecation 数据来验证建议。如已弃用,调用 /api/alternatives/{ecosystem}/{package}。精简端点,无需认证。`,
   },
   {
-    id: "mcp",
-    label: "MCP (Claude Desktop, Cursor)",
+    id: "mcp-remote",
+    label: "MCP 远程 (无需安装)",
     file: "mcp.json / claude_desktop_config.json",
-    note: "首先执行: npm install -g depscope-mcp。然后把下面的配置加入 MCP 客户端。自动注册 14 个工具。",
+    note: "零安装。Claude Desktop / Cursor / Windsurf 通过 URL 连接。自动注册 20 个工具。",
+    snippet: `{
+  "mcpServers": {
+    "depscope": {
+      "url": "https://mcp.depscope.dev/mcp"
+    }
+  }
+}`,
+  },
+  {
+    id: "mcp-local",
+    label: "MCP 本地 (stdio)",
+    file: "mcp.json / claude_desktop_config.json",
+    note: "适用于不支持远程 MCP 的客户端。需要: npm install -g depscope-mcp。",
     snippet: `{
   "mcpServers": {
     "depscope": {
