@@ -74,10 +74,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 async function fetchPackages(ecosystem: string): Promise<PackageEntry[]> {
   try {
-    const res = await fetch("http://127.0.0.1:8000/api/sitemap-packages", { next: { revalidate: 3600 } });
+    const url = `http://127.0.0.1:8000/api/sitemap-packages?ecosystem=${encodeURIComponent(ecosystem)}`;
+    const res = await fetch(url, { next: { revalidate: 3600 } });
     if (!res.ok) return [];
-    const all: PackageEntry[] = await res.json();
-    return all.filter((p) => p.ecosystem === ecosystem);
+    return (await res.json()) as PackageEntry[];
   } catch {
     return [];
   }
