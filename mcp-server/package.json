@@ -1,6 +1,6 @@
 {
   "name": "depscope-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MCP server for DepScope - Package Intelligence for AI Agents",
   "main": "index.js",
   "bin": {
@@ -13,7 +13,14 @@
     "security",
     "npm",
     "pypi",
-    "ai-agents"
+    "ai-agents",
+    "model-context-protocol",
+    "package-intelligence",
+    "vulnerability-scanner",
+    "claude",
+    "cursor",
+    "copilot",
+    "aider"
   ],
   "license": "MIT",
   "repository": {
@@ -22,5 +29,14 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "homepage": "https://depscope.dev",
+  "bugs": {
+    "url": "https://github.com/cuttalo/depscope/issues"
+  },
+  "author": {
+    "name": "Cuttalo srl",
+    "email": "depscope@cuttalo.com",
+    "url": "https://depscope.dev"
   }
 }

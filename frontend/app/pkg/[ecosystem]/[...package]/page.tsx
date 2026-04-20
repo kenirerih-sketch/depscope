@@ -23,6 +23,7 @@ import {
   Footer,
 } from "../../../../components/ui";
 import { CopyButton } from "../../../../components/CopyButton";
+import { SecurityPanel } from "./security-panel";
 
 interface HealthBreakdown {
   maintenance: number;
@@ -103,7 +104,7 @@ interface PackageData {
 }
 
 function buildRecommendation(data: PackageData): Recommendation {
-  if (data.recommendation) return data.recommendation;
+  if (data.recommendation) return { action: data.recommendation.action || "safe_to_use", summary: data.recommendation.summary || "", use_version: data.recommendation.use_version || data.latest_version, version_hint: data.recommendation.version_hint || null, issues: data.recommendation.issues || [] };
 
   const score = data?.health?.score ?? 0;
   const vulns = data.vulnerabilities;
@@ -588,6 +589,9 @@ export default async function PackagePage({ params }: Props) {
             typescript={data.typescript ?? null}
           />
         )}
+
+        {/* Security panel — malware, typosquat, threat tier, scorecard, maintainer */}
+        <SecurityPanel data={data} />
 
         {/* Health History */}
         <HealthHistorySection ecosystem={ecosystem} pkg={data.package} />

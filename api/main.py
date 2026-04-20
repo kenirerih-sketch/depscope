@@ -12,6 +12,17 @@ from api.config import VERSION
 
 # IPs to exclude from analytics (our own servers, cron, preprocess)
 EXCLUDED_IPS = {"127.0.0.1", "::1", "10.10.0.140", "10.10.0.1", "91.134.4.25"}
+# Any IP starting with these is treated as internal/team traffic (never tracked).
+# /24 prefixes keep dynamic IPs covered.
+EXCLUDED_IP_PREFIXES = ("10.10.", "127.", "37.182.176.", "37.182.177.", "91.134.4.")
+
+def _is_excluded_ip(ip: str) -> bool:
+    if not ip:
+        return False
+    if _is_excluded_ip(ip):
+        return True
+    return any(ip.startswith(p) for p in EXCLUDED_IP_PREFIXES)
+
 from api.database import get_pool, close_pool
 from api.cache import cache_get, cache_set, rate_limit_check
 from api.registries import fetch_package, fetch_vulnerabilities, save_package_to_db, fetch_github_stats, save_github_stats, get_github_stats_from_db
@@ -86,6 +97,122 @@ async def rate_limit_middleware(request: Request, call_next):
     response = await call_next(request)
     return response
 
+
+
+async def _augment_check(conn, ecosystem, package, payload):
+    """Attach threat_tier counters, typosquat info, and maintainer summary to a /api/check response."""
+    # 1) Vulns threat enrichment
+    vulns = payload.get("vulnerabilities", {})
+    if isinstance(vulns, dict) and isinstance(vulns.get("list"), list) and vulns["list"]:
+        enriched = await _enrich_vulns_with_threat_intel(conn, vulns["list"])
+        vulns["list"] = enriched
+        vulns["actively_exploited_count"] = sum(1 for v in enriched if v.get("in_kev"))
+        vulns["likely_exploited_count"] = sum(1 for v in enriched if v.get("threat_tier") == "likely_exploited")
+        payload["vulnerabilities"] = vulns
+    # 2) Typosquat
+    ts = await conn.fetch("""
+        SELECT legitimate, distance, reason, downloads_legit
+        FROM typosquat_candidates
+        WHERE ecosystem=$1 AND LOWER(suspect)=LOWER($2) ORDER BY distance LIMIT 3
+    """, ecosystem, package)
+    if ts:
+        payload["typosquat"] = {
+            "is_suspected": True,
+            "targets": [{"legitimate_package": r["legitimate"], "distance": r["distance"], "reason": r["reason"]} for r in ts],
+        }
+    else:
+        payload["typosquat"] = {"is_suspected": False}
+    # 3) Maintainer
+    m = await conn.fetchrow("""
+        SELECT bus_factor_3m, active_contributors_12m, primary_author_ratio,
+               owner_account_age_days, recent_ownership_change, is_archived, stars
+        FROM maintainer_signals WHERE ecosystem=$1 AND package_name=$2
+    """, ecosystem, package)
+    if m:
+        alerts = []
+        if m["bus_factor_3m"] == 1: alerts.append("single_active_maintainer_3m")
+        if m["primary_author_ratio"] and m["primary_author_ratio"] >= 0.9: alerts.append("single_author_dominance")
+        if m["recent_ownership_change"]: alerts.append("recent_ownership_change_suspected")
+        if m["is_archived"]: alerts.append("archived_repo")
+        if m["owner_account_age_days"] and m["owner_account_age_days"] < 90: alerts.append("new_owner_account")
+        payload["maintainer_trust"] = {
+            "available": True,
+            "bus_factor_3m": m["bus_factor_3m"],
+            "active_contributors_12m": m["active_contributors_12m"],
+            "primary_author_ratio": float(m["primary_author_ratio"]) if m["primary_author_ratio"] is not None else None,
+            "owner_account_age_days": m["owner_account_age_days"],
+            "is_archived": m["is_archived"],
+            "stars": m["stars"],
+            "alerts": alerts,
+        }
+    else:
+        payload["maintainer_trust"] = {"available": False}
+    # 4) Malicious flag
+    mal = await conn.fetchrow("""
+        SELECT vuln_id, summary FROM malicious_packages
+        WHERE ecosystem=$1 AND LOWER(package_name)=LOWER($2) LIMIT 1
+    """, ecosystem, package)
+    if mal:
+        payload["malicious"] = {
+            "is_malicious": True,
+            "advisory_id": mal["vuln_id"],
+            "summary": mal["summary"],
+            "action": "do_not_install",
+        }
+        # Override recommendation for any malicious package
+        payload["recommendation"] = {
+            "action": "do_not_use",
+            "summary": f"Do not install. Package is flagged as malicious (advisory {mal['vuln_id']}).",
+            "version_hint": None,
+        }
+    else:
+        payload["malicious"] = {"is_malicious": False}
+    # 5) OSS Scorecard summary
+    m_repo = await conn.fetchrow(
+        "SELECT repo_owner, repo_name FROM maintainer_signals WHERE ecosystem=$1 AND package_name=$2",
+        ecosystem, package,
+    )
+    if m_repo and m_repo["repo_owner"]:
+        ru = f"github.com/{m_repo['repo_owner']}/{m_repo['repo_name']}"
+        sc = await conn.fetchrow("SELECT score FROM scorecard_scores WHERE repo_url=$1", ru)
+        if sc:
+            s = float(sc["score"])
+            tier = "strong" if s >= 7.5 else "moderate" if s >= 5 else "weak" if s >= 3 else "poor"
+            payload["scorecard"] = {"available": True, "score": s, "tier": tier}
+        else:
+            payload["scorecard"] = {"available": False}
+    else:
+        payload["scorecard"] = {"available": False}
+    # 6) Quality signals (criticality, velocity, publish security)
+    q = await conn.fetchrow("""
+        SELECT criticality_score, downloads_4w_avg, velocity_pct, publish_security
+        FROM package_quality
+        WHERE ecosystem=$1 AND LOWER(package_name)=LOWER($2)
+    """, ecosystem, package)
+    if q:
+        crit = float(q["criticality_score"]) if q["criticality_score"] is not None else None
+        vel = float(q["velocity_pct"]) if q["velocity_pct"] is not None else None
+        c_tier = None
+        if crit is not None:
+            c_tier = "critical" if crit >= 0.7 else "high" if crit >= 0.5 else "medium" if crit >= 0.3 else "low"
+        v_trend = None
+        if vel is not None:
+            if vel >= 50: v_trend = "rapid_growth"
+            elif vel >= 10: v_trend = "growing"
+            elif vel >= -10: v_trend = "stable"
+            elif vel >= -50: v_trend = "declining"
+            else: v_trend = "rapid_decline"
+        payload["quality"] = {
+            "available": True,
+            "criticality_score": crit,
+            "criticality_tier": c_tier,
+            "velocity_pct": round(vel, 1) if vel is not None else None,
+            "velocity_trend": v_trend,
+            "publish_security": q["publish_security"],
+        }
+    else:
+        payload["quality"] = {"available": False}
+    return payload
 
 @app.get("/", tags=["discovery"])
 async def root():
@@ -306,6 +433,77 @@ async def _fetch_full_package(ecosystem: str, package: str) -> dict | None:
     }
 
 
+
+async def _enrich_vulns_with_threat_intel(conn, vulns):
+    """Mutate vulns in place, adding KEV+EPSS joins + threat_tier."""
+    if not vulns:
+        return vulns
+    cve_ids = set()
+    for v in vulns:
+        for cve in (v.get("aliases") or []):
+            if isinstance(cve, str) and cve.upper().startswith("CVE-"):
+                cve_ids.add(cve.upper())
+        for key in ("vuln_id", "id"):
+            vid = (v.get(key) or "").upper()
+            if vid.startswith("CVE-"):
+                cve_ids.add(vid)
+    if not cve_ids:
+        return vulns
+    cve_list = list(cve_ids)
+    # Fetch KEV
+    kev_rows = await conn.fetch(
+        "SELECT cve_id, date_added, known_ransomware FROM kev_catalog WHERE cve_id = ANY($1::text[])",
+        cve_list,
+    )
+    kev = {r["cve_id"]: r for r in kev_rows}
+    # Fetch EPSS
+    epss_rows = await conn.fetch(
+        "SELECT cve_id, epss, percentile FROM epss_scores WHERE cve_id = ANY($1::text[])",
+        cve_list,
+    )
+    epss = {r["cve_id"]: r for r in epss_rows}
+
+    for v in vulns:
+        cves = set([(v.get("vuln_id") or v.get("id") or "").upper()] + [a.upper() for a in (v.get("aliases") or []) if isinstance(a,str)])
+        cves = [c for c in cves if c.startswith("CVE-")]
+        k_hit = next((kev[c] for c in cves if c in kev), None)
+        e_hit = next((epss[c] for c in cves if c in epss), None)
+        if k_hit:
+            v["in_kev"] = True
+            v["kev_date_added"] = k_hit["date_added"].isoformat() if k_hit["date_added"] else None
+            v["kev_ransomware"] = k_hit["known_ransomware"]
+        else:
+            v["in_kev"] = False
+        if e_hit:
+            v["epss_prob"] = float(e_hit["epss"])
+            v["epss_percentile"] = float(e_hit["percentile"]) if e_hit["percentile"] is not None else None
+        # Threat tier
+        if v.get("in_kev"):
+            v["threat_tier"] = "actively_exploited"
+        elif v.get("epss_prob") and v["epss_prob"] >= 0.5:
+            v["threat_tier"] = "likely_exploited"
+        elif v.get("epss_prob") is not None:
+            v["threat_tier"] = "theoretical"
+        else:
+            v["threat_tier"] = "unknown"
+    return vulns
+
+
+
+
+@app.get("/.well-known/security.txt", include_in_schema=False)
+async def security_txt():
+    return PlainTextResponse(
+        content="""Contact: mailto:security@depscope.dev
+Expires: 2027-04-19T00:00:00.000Z
+Preferred-Languages: en, it
+Canonical: https://depscope.dev/.well-known/security.txt
+Policy: https://depscope.dev/security/disclosure
+Acknowledgments: https://depscope.dev/security#hall-of-fame
+""",
+        media_type="text/plain; charset=utf-8",
+    )
+
 @app.get("/api/check/{ecosystem}/{package:path}", tags=["packages"])
 async def check_package(ecosystem: str, package: str, version: str = None, request: Request = None):
     """
@@ -339,6 +537,12 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
     result["_response_ms"] = int((time.time() - start) * 1000)
     result["_powered_by"] = "depscope.dev — free package intelligence for AI agents"
 
+    # Enrich with KEV/EPSS/typosquat/maintainer
+    try:
+        async with (await get_pool()).acquire() as conn:
+            result = await _augment_check(conn, ecosystem, package, result)
+    except Exception:
+        pass
     await cache_set(cache_key, result, ttl=3600)
     _log_usage(ecosystem, package, request,
                response_time_ms=result["_response_ms"], cache_hit=False,
@@ -526,13 +730,72 @@ def _build_prompt_text(result: dict, cache_age_minutes: int | None = None) -> st
         rec_lines.append("Note: package is marked deprecated.")
 
     # Build text
-    lines = [
+    # New signal lines (malware first — most critical)
+    mal = result.get("malicious") or {}
+    typosquat = result.get("typosquat") or {}
+    threat_v = vulns  # alias for clarity
+    scorecard = result.get("scorecard") or {}
+    maintainer = result.get("maintainer_trust") or {}
+
+    lines = []
+    if mal.get("is_malicious"):
+        lines.append(f"⚠️  MALICIOUS PACKAGE — do not install. Advisory: {mal.get('advisory_id','?')}.")
+    if typosquat.get("is_suspected"):
+        tgts = typosquat.get("targets") or []
+        if tgts:
+            legits = ", ".join(t.get("legitimate_package", "?") for t in tgts[:2])
+            lines.append(f"⚠️  Possible typosquat of: {legits}. Verify spelling before install.")
+
+    lines += [
         f"{pkg}@{ver} — {eco} package",
         f"Health: {score}/100 ({risk} risk)",
         f"Status: {status}",
         vuln_line,
         license_line,
     ]
+
+    # Threat intelligence summary (if any CVE)
+    active = threat_v.get("actively_exploited_count") or 0
+    likely = threat_v.get("likely_exploited_count") or 0
+    if active or likely:
+        parts = []
+        if active: parts.append(f"{active} actively exploited (CISA KEV)")
+        if likely: parts.append(f"{likely} likely exploited (EPSS ≥ 0.5)")
+        lines.append("Threat intel: " + " + ".join(parts))
+
+    # OSS Scorecard
+    if scorecard.get("available") and scorecard.get("score") is not None:
+        lines.append(f"OSS Scorecard: {scorecard['score']}/10 ({scorecard.get('tier','?')})")
+
+    # Maintainer trust alerts
+    if maintainer.get("available"):
+        alerts = maintainer.get("alerts") or []
+        if alerts:
+            lines.append(f"Maintainer flags: {', '.join(alerts)}")
+        bf = maintainer.get("bus_factor_3m")
+        if bf:
+            lines.append(f"Active maintainers (3m): {bf}")
+
+    # Quality signals (criticality, velocity, publish security)
+    quality = result.get("quality") or {}
+    if quality.get("available"):
+        q_bits = []
+        cs = quality.get("criticality_score")
+        if cs is not None:
+            tier = quality.get("criticality_tier") or ""
+            q_bits.append(f"criticality {cs} ({tier})")
+        vt = quality.get("velocity_trend")
+        vp = quality.get("velocity_pct")
+        if vt and vt != "stable":
+            sign = "+" if (vp or 0) > 0 else ""
+            q_bits.append(f"downloads {vt.replace('_', ' ')} ({sign}{vp}% vs 4w)")
+        ps = quality.get("publish_security")
+        if ps:
+            ps_label = {"signed": "npm signed", "attested": "npm attested", "trusted": "PyPI trusted publisher",
+                        "likely_trusted": "PyPI likely trusted", "unsigned": "npm unsigned", "api_token": "PyPI api-token"}.get(ps, ps)
+            q_bits.append(f"publish: {ps_label}")
+        if q_bits:
+            lines.append("Quality: " + "; ".join(q_bits))
     if bundle_line:
         lines.append(bundle_line)
     if ts_line:
@@ -625,6 +888,13 @@ async def get_prompt(ecosystem: str, package: str, request: Request = None):
             media_type="text/plain; charset=utf-8",
         )
 
+    # Enrich with KEV/EPSS/typosquat/maintainer/malicious/scorecard
+    try:
+        async with (await get_pool()).acquire() as conn:
+            result = await _augment_check(conn, ecosystem, package, result)
+    except Exception:
+        pass
+
     text = _build_prompt_text(result, cache_age_minutes=None)
     await cache_set(cache_key, {"text": text, "ts": time.time()}, ttl=3600)
     rt_ms = int((time.time() - start) * 1000)
@@ -655,19 +925,315 @@ async def get_health(ecosystem: str, package: str):
     return result
 
 
+@app.get("/api/typosquat/{ecosystem}/{package:path}", tags=["packages"])
+async def check_typosquat(ecosystem: str, package: str):
+    """Is this package name a typosquat of a popular one?
+
+    Returns legitimate targets the name looks close to, with Levenshtein distance
+    and popularity delta.
+    """
+    ecosystem = ecosystem.lower()
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT suspect, legitimate, distance, downloads_suspect, downloads_legit, reason
+            FROM typosquat_candidates
+            WHERE ecosystem=$1 AND LOWER(suspect)=LOWER($2)
+            ORDER BY distance, downloads_legit DESC
+        """, ecosystem, package)
+    if not rows:
+        return {"package": package, "ecosystem": ecosystem, "is_suspected_typosquat": False, "targets": []}
+    return {
+        "package": package,
+        "ecosystem": ecosystem,
+        "is_suspected_typosquat": True,
+        "targets": [
+            {
+                "legitimate_package": r["legitimate"],
+                "distance": r["distance"],
+                "reason": r["reason"],
+                "downloads_suspect": r["downloads_suspect"],
+                "downloads_legit": r["downloads_legit"],
+                "popularity_ratio": round(r["downloads_legit"] / max(r["downloads_suspect"], 1), 1),
+            }
+            for r in rows
+        ],
+        "note": "Suspect packages are those with much smaller downloads and a name within Levenshtein 1-2 of a top-500 legit package.",
+    }
+
+
+
+
+# ---- License compatibility (simplified SPDX mapping) ----
+PERMISSIVE = {"MIT", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Apache-2.0", "0BSD", "Unlicense", "MIT-0", "BSL-1.0", "WTFPL", "Zlib", "CC0-1.0"}
+WEAK_COPYLEFT = {"LGPL-2.1-only", "LGPL-2.1-or-later", "LGPL-3.0-only", "LGPL-3.0-or-later", "MPL-2.0", "EPL-2.0", "EPL-1.0"}
+STRONG_COPYLEFT = {"GPL-2.0-only", "GPL-2.0-or-later", "GPL-3.0-only", "GPL-3.0-or-later", "AGPL-3.0-only", "AGPL-3.0-or-later"}
+RESTRICTED_COMMERCIAL = {"BUSL-1.1", "SSPL-1.0", "CC-BY-NC-4.0", "CC-BY-NC-SA-4.0", "Elastic-2.0", "Commons-Clause"}
+PROPRIETARY_FLAGS = {"UNLICENSED", "SEE LICENSE", "Custom"}
+
+def license_class(spdx: str):
+    if not spdx: return "unknown"
+    s = spdx.strip()
+    up = s.upper()
+    if up in {x.upper() for x in PERMISSIVE}: return "permissive"
+    if up in {x.upper() for x in WEAK_COPYLEFT}: return "weak_copyleft"
+    if up in {x.upper() for x in STRONG_COPYLEFT}: return "strong_copyleft"
+    if up in {x.upper() for x in RESTRICTED_COMMERCIAL}: return "restricted_commercial"
+    for f in PROPRIETARY_FLAGS:
+        if f.upper() in up: return "proprietary_or_unknown"
+    # heuristics
+    if up.startswith("MIT") or up.startswith("APACHE"): return "permissive"
+    if up.startswith("GPL") or up.startswith("AGPL"): return "strong_copyleft"
+    if up.startswith("LGPL") or up.startswith("MPL"): return "weak_copyleft"
+    return "unknown"
+
+LICENSE_ADVICE = {
+    "permissive": "Safe for most commercial use. Attribution required.",
+    "weak_copyleft": "Dynamic linking OK. Source of modifications to the library itself must be published.",
+    "strong_copyleft": "Derivative works must be released under the same (copyleft) license. Not compatible with proprietary distribution.",
+    "restricted_commercial": "Usage restricted (non-commercial, source-available, or SaaS clauses). Review before shipping.",
+    "proprietary_or_unknown": "License unclear or proprietary. Treat as not-OSS unless confirmed.",
+    "unknown": "License could not be classified automatically.",
+}
+
+
+
+@app.get("/api/malicious/{ecosystem}/{package:path}", tags=["packages"])
+async def check_malicious(ecosystem: str, package: str):
+    """Is this package flagged as malicious by OpenSSF / OSV?"""
+    ecosystem = ecosystem.lower()
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT vuln_id, published_at, summary, source
+            FROM malicious_packages
+            WHERE ecosystem=$1 AND LOWER(package_name)=LOWER($2) LIMIT 1
+        """, ecosystem, package)
+    if not row:
+        return {"package": package, "ecosystem": ecosystem, "is_malicious": False}
+    return {
+        "package": package, "ecosystem": ecosystem,
+        "is_malicious": True,
+        "advisory_id": row["vuln_id"],
+        "published_at": row["published_at"].isoformat() if row["published_at"] else None,
+        "summary": row["summary"],
+        "source": row["source"],
+        "action": "do_not_install",
+    }
+
+
+@app.get("/api/scorecard/{ecosystem}/{package:path}", tags=["packages"])
+async def get_scorecard(ecosystem: str, package: str):
+    """OSS Scorecard (OpenSSF) security posture score 0-10 for the linked GitHub repo."""
+    ecosystem = ecosystem.lower()
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        ms = await conn.fetchrow(
+            "SELECT repo_owner, repo_name FROM maintainer_signals WHERE ecosystem=$1 AND package_name=$2",
+            ecosystem, package,
+        )
+        if not ms or not ms["repo_owner"]:
+            return {"package": package, "ecosystem": ecosystem, "available": False, "reason": "no repo linked"}
+        repo_url = f"github.com/{ms['repo_owner']}/{ms['repo_name']}"
+        row = await conn.fetchrow(
+            "SELECT score, checks_json, scorecard_date FROM scorecard_scores WHERE repo_url=$1",
+            repo_url,
+        )
+    if not row:
+        return {"package": package, "ecosystem": ecosystem, "available": False, "reason": "not scored yet", "repo": repo_url}
+    import json as _J; _cj = row["checks_json"]; checks = _J.loads(_cj) if isinstance(_cj, str) else (_cj or {})
+    # Tier
+    score = float(row["score"])
+    if score >= 7.5:   tier = "strong"
+    elif score >= 5.0: tier = "moderate"
+    elif score >= 3.0: tier = "weak"
+    else:              tier = "poor"
+    # Critical checks at risk (score < 5 on important ones)
+    important = ["Binary-Artifacts", "Branch-Protection", "Code-Review", "Dangerous-Workflow",
+                 "Dependency-Update-Tool", "Maintained", "Pinned-Dependencies", "Signed-Releases",
+                 "Token-Permissions", "Vulnerabilities"]
+    at_risk = [name for name in important
+               if checks.get(name) and isinstance(checks[name].get("score"), (int, float))
+               and checks[name]["score"] is not None and checks[name]["score"] < 5]
+    return {
+        "package": package, "ecosystem": ecosystem,
+        "repo": repo_url,
+        "available": True,
+        "score": score,
+        "tier": tier,
+        "scorecard_date": row["scorecard_date"].isoformat() if row["scorecard_date"] else None,
+        "at_risk_checks": at_risk,
+        "checks": checks,
+    }
+
+
+@app.get("/api/quality/{ecosystem}/{package:path}", tags=["packages"])
+async def get_quality(ecosystem: str, package: str):
+    """Package quality signals: criticality score, download velocity, publish security (npm 2FA / PyPI Trusted Publishing)."""
+    ecosystem = ecosystem.lower()
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT criticality_score, criticality_date,
+                   downloads_4w_avg, velocity_pct,
+                   publish_security, publish_detail, last_checked
+            FROM package_quality
+            WHERE ecosystem=$1 AND LOWER(package_name)=LOWER($2)
+        """, ecosystem, package)
+    if not row:
+        return {"package": package, "ecosystem": ecosystem, "available": False}
+    crit = float(row["criticality_score"]) if row["criticality_score"] is not None else None
+    tier = None
+    if crit is not None:
+        tier = "critical" if crit >= 0.7 else "high" if crit >= 0.5 else "medium" if crit >= 0.3 else "low"
+    vel = float(row["velocity_pct"]) if row["velocity_pct"] is not None else None
+    vel_trend = None
+    if vel is not None:
+        if vel >= 50: vel_trend = "rapid_growth"
+        elif vel >= 10: vel_trend = "growing"
+        elif vel >= -10: vel_trend = "stable"
+        elif vel >= -50: vel_trend = "declining"
+        else: vel_trend = "rapid_decline"
+    return {
+        "package": package,
+        "ecosystem": ecosystem,
+        "available": True,
+        "criticality": {
+            "score": crit,
+            "tier": tier,
+            "date": row["criticality_date"].isoformat() if row["criticality_date"] else None,
+        } if crit is not None else None,
+        "velocity": {
+            "pct_vs_4w_avg": round(vel, 1) if vel is not None else None,
+            "trend": vel_trend,
+            "downloads_4w_avg": row["downloads_4w_avg"],
+        } if vel is not None else None,
+        "publish_security": {
+            "status": row["publish_security"],
+            "detail": row["publish_detail"],
+        } if row["publish_security"] else None,
+        "last_checked": row["last_checked"].isoformat() if row["last_checked"] else None,
+    }
+
+
+@app.get("/api/license/{ecosystem}/{package:path}", tags=["packages"])
+async def get_license(ecosystem: str, package: str):
+    ecosystem = ecosystem.lower()
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT license FROM packages WHERE ecosystem=$1 AND name=$2", ecosystem, package)
+    spdx = (row["license"] or "").strip() if row else None
+    cls = license_class(spdx) if spdx else "unknown"
+    return {
+        "package": package, "ecosystem": ecosystem,
+        "license": spdx or None,
+        "class": cls,
+        "advice": LICENSE_ADVICE.get(cls, "Unknown classification."),
+        "commercial_safe": cls in ("permissive", "weak_copyleft"),
+        "copyleft": cls in ("weak_copyleft", "strong_copyleft"),
+    }
+
+
+# ---- Provenance: npm has `_provenance` per version; PyPI uses PEP 740 ----
+@app.get("/api/provenance/{ecosystem}/{package:path}", tags=["packages"])
+async def get_provenance(ecosystem: str, package: str):
+    """Best-effort: inspect registry metadata for provenance / signing signals."""
+    ecosystem = ecosystem.lower()
+    import aiohttp
+    async with aiohttp.ClientSession() as s:
+        try:
+            if ecosystem == "npm":
+                async with s.get(f"https://registry.npmjs.org/{package}", timeout=aiohttp.ClientTimeout(total=8)) as r:
+                    if r.status != 200:
+                        return {"package": package, "ecosystem": ecosystem, "available": False}
+                    data = await r.json()
+                latest = (data.get("dist-tags") or {}).get("latest")
+                v = (data.get("versions") or {}).get(latest, {}) if latest else {}
+                dist = v.get("dist", {}) or {}
+                has_prov = bool(dist.get("attestations"))
+                return {
+                    "package": package, "ecosystem": ecosystem,
+                    "available": True, "version": latest,
+                    "has_provenance": has_prov,
+                    "signature_types": list((dist.get("signatures") or [{}])[0].keys()) if dist.get("signatures") else [],
+                    "notes": "npm --provenance uploads generate Sigstore attestations during CI; publishers without CI rarely have them.",
+                }
+            elif ecosystem == "pypi":
+                async with s.get(f"https://pypi.org/pypi/{package}/json", timeout=aiohttp.ClientTimeout(total=8)) as r:
+                    if r.status != 200:
+                        return {"package": package, "ecosystem": ecosystem, "available": False}
+                    data = await r.json()
+                latest = (data.get("info") or {}).get("version")
+                urls = (data.get("releases") or {}).get(latest, []) if latest else []
+                has_attest = any(u.get("attestations") for u in urls)
+                trusted_publishing = any("https://github.com" in (u.get("upload_time_iso_8601","") or "") for u in urls)
+                return {
+                    "package": package, "ecosystem": ecosystem,
+                    "available": True, "version": latest,
+                    "has_provenance": has_attest,
+                    "notes": "PyPI PEP 740 attestations + Trusted Publishing (OIDC to GitHub Actions) signal a CI-signed release.",
+                }
+        except Exception:
+            pass
+    return {"package": package, "ecosystem": ecosystem, "available": False, "notes": "Provenance inspection not supported for this ecosystem yet."}
+
+@app.get("/api/maintainers/{ecosystem}/{package:path}", tags=["packages"])
+async def get_maintainer_signals(ecosystem: str, package: str):
+    """Maintainer trust signals: bus factor, primary author dominance, account age, ownership change."""
+    ecosystem = ecosystem.lower()
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("""
+            SELECT repo_owner, repo_name, repo_created_at, repo_pushed_at,
+                   bus_factor_3m, active_contributors_12m,
+                   primary_author, primary_author_ratio, owner_account_age_days,
+                   recent_ownership_change, is_archived,
+                   stars, forks, open_issues, updated_at
+            FROM maintainer_signals
+            WHERE ecosystem=$1 AND package_name=$2
+        """, ecosystem, package)
+    if not row:
+        return {"package": package, "ecosystem": ecosystem, "available": False, "reason": "not computed yet"}
+    d = dict(row)
+    for k in ("repo_created_at", "repo_pushed_at", "updated_at"):
+        if d.get(k): d[k] = d[k].isoformat()
+    # Derived alerts
+    alerts = []
+    if d.get("bus_factor_3m") == 1:
+        alerts.append("single_active_maintainer_3m")
+    if d.get("primary_author_ratio") and d["primary_author_ratio"] >= 0.9:
+        alerts.append("single_author_dominance")
+    if d.get("recent_ownership_change"):
+        alerts.append("recent_ownership_change_suspected")
+    if d.get("is_archived"):
+        alerts.append("archived_repo")
+    if d.get("owner_account_age_days") and d["owner_account_age_days"] < 90:
+        alerts.append("new_owner_account")
+    return {
+        "package": package, "ecosystem": ecosystem,
+        "available": True, "signals": d, "alerts": alerts,
+    }
+
 @app.get("/api/vulns/{ecosystem}/{package:path}", tags=["packages"])
 async def get_vulns(ecosystem: str, package: str):
-    """Vulnerabilities affecting the LATEST version only."""
+    """Vulnerabilities affecting the LATEST version only, enriched with CISA KEV + EPSS."""
     ecosystem = ecosystem.lower()
     pkg_data = await fetch_package(ecosystem, package)
     latest_version = pkg_data.get("latest_version", "") if pkg_data else None
     vulns = await fetch_vulnerabilities(ecosystem, package, latest_version=latest_version)
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        vulns = await _enrich_vulns_with_threat_intel(conn, vulns)
+    active = sum(1 for v in vulns if v.get("in_kev"))
+    likely = sum(1 for v in vulns if v.get("threat_tier") == "likely_exploited")
     return {
         "package": package,
         "ecosystem": ecosystem,
         "latest_version": latest_version,
         "count": len(vulns),
-        "note": "Only vulnerabilities affecting the latest version are shown",
+        "actively_exploited_count": active,
+        "likely_exploited_count": likely,
+        "note": "Only vulnerabilities affecting the latest version are shown. Enriched with CISA KEV + EPSS.",
         "vulnerabilities": vulns,
     }
 
@@ -1589,7 +2155,7 @@ def _log_usage(ecosystem: str, package: str, request: Request = None,
                     except Exception:
                         ep = "check"
             # Skip our own infra
-            if ip in EXCLUDED_IPS:
+            if _is_excluded_ip(ip):
                 return
             session_id = _derive_session_id(ip, source) if ip else None
             api_key_id = await _resolve_api_key_id(request)
@@ -1663,7 +2229,7 @@ async def openapi_for_gpt():
         "info": {
             "title": "DepScope",
             "description": "Package Intelligence API for AI Agents. Check health, vulnerabilities, versions, find alternatives, search packages. Free, no auth.",
-            "version": "0.2.0",
+            "version": "0.3.0",
         },
         "servers": [{"url": "https://depscope.dev"}],
         "paths": {
@@ -1808,6 +2374,83 @@ async def openapi_for_gpt():
                         {"name": "stack", "in": "query", "required": True, "schema": {"type": "string"}, "description": "Comma-separated name@version pairs, e.g. 'next@15,react@19,prisma@6'."},
                     ],
                     "responses": {"200": {"description": "Compatibility verdict + similar verified stacks"}},
+                }
+            },
+            "/api/malicious/{ecosystem}/{package}": {
+                "get": {
+                    "operationId": "checkMalicious",
+                    "summary": "CRITICAL SECURITY CHECK: is this package flagged as malicious by OpenSSF/OSV? Call before any install suggestion for unfamiliar package.",
+                    "parameters": [
+                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
+                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
+                    ],
+                    "responses": {"200": {"description": "Malicious flag + advisory_id + action"}},
+                }
+            },
+            "/api/typosquat/{ecosystem}/{package}": {
+                "get": {
+                    "operationId": "checkTyposquat",
+                    "summary": "Is this a suspected typosquat of a popular package? Returns likely legitimate targets with distance.",
+                    "parameters": [
+                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
+                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
+                    ],
+                    "responses": {"200": {"description": "Typosquat candidates"}},
+                }
+            },
+            "/api/scorecard/{ecosystem}/{package}": {
+                "get": {
+                    "operationId": "getScorecard",
+                    "summary": "OpenSSF Scorecard security posture score (0-10) for the linked GitHub repo.",
+                    "parameters": [
+                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
+                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
+                    ],
+                    "responses": {"200": {"description": "Scorecard score + at-risk checks"}},
+                }
+            },
+            "/api/maintainers/{ecosystem}/{package}": {
+                "get": {
+                    "operationId": "getMaintainerTrust",
+                    "summary": "Maintainer trust signals: bus factor, contributor count, account ages, ownership change detection.",
+                    "parameters": [
+                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
+                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
+                    ],
+                    "responses": {"200": {"description": "Maintainer trust data with alerts"}},
+                }
+            },
+            "/api/quality/{ecosystem}/{package}": {
+                "get": {
+                    "operationId": "getQuality",
+                    "summary": "Quality signals: OSS criticality score, download velocity trend, publish security (npm signed/attested, PyPI trusted).",
+                    "parameters": [
+                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
+                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
+                    ],
+                    "responses": {"200": {"description": "Quality signals"}},
+                }
+            },
+            "/api/provenance/{ecosystem}/{package}": {
+                "get": {
+                    "operationId": "getProvenance",
+                    "summary": "Cryptographic provenance attestations (SLSA/Sigstore) — proves package was built in verified CI pipeline.",
+                    "parameters": [
+                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
+                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
+                    ],
+                    "responses": {"200": {"description": "Provenance attestation data"}},
+                }
+            },
+            "/api/prompt/{ecosystem}/{package}": {
+                "get": {
+                    "operationId": "getPackagePrompt",
+                    "summary": "LLM-optimized plain-text summary of a package (~500 tokens) — compact decision brief for AI agents.",
+                    "parameters": [
+                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
+                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
+                    ],
+                    "responses": {"200": {"description": "Plain text prompt"}},
                 }
             },
         },
@@ -2771,7 +3414,7 @@ async def track_pageview(request: Request):
             return {"ok": True}
         country = request.headers.get("CF-IPCountry", "")
 
-        if ip in EXCLUDED_IPS:
+        if _is_excluded_ip(ip):
             return {"ok": True}
         pool = await get_pool()
         async with pool.acquire() as conn:
@@ -2793,30 +3436,30 @@ async def admin_pageviews(request: Request):
 
     pool = await get_pool()
     async with pool.acquire() as conn:
-        total = await conn.fetchval("SELECT COUNT(*) FROM page_views")
-        today = await conn.fetchval("SELECT COUNT(*) FROM page_views WHERE created_at > CURRENT_DATE")
-        unique_today = await conn.fetchval("SELECT COUNT(DISTINCT ip_address) FROM page_views WHERE created_at > CURRENT_DATE")
+        total = await conn.fetchval("SELECT COUNT(*) FROM page_views_clean")
+        today = await conn.fetchval("SELECT COUNT(*) FROM page_views_clean WHERE created_at > CURRENT_DATE")
+        unique_today = await conn.fetchval("SELECT COUNT(DISTINCT ip_address) FROM page_views_clean WHERE created_at > CURRENT_DATE")
 
         by_page = await conn.fetch("""
-            SELECT path, COUNT(*) as views FROM page_views
+            SELECT path, COUNT(*) as views FROM page_views_clean
             WHERE created_at > NOW() - INTERVAL '7 days'
             GROUP BY path ORDER BY views DESC LIMIT 20
         """)
 
         by_day = await conn.fetch("""
             SELECT DATE(created_at) as day, COUNT(*) as views, COUNT(DISTINCT ip_address) as unique_visitors
-            FROM page_views WHERE created_at > NOW() - INTERVAL '30 days'
+            FROM page_views_clean WHERE created_at > NOW() - INTERVAL '30 days'
             GROUP BY DATE(created_at) ORDER BY day
         """)
 
         by_country = await conn.fetch("""
-            SELECT country, COUNT(*) as views FROM page_views
+            SELECT country, COUNT(*) as views FROM page_views_clean
             WHERE created_at > NOW() - INTERVAL '7 days' AND country != ''
             GROUP BY country ORDER BY views DESC LIMIT 15
         """)
 
         by_referrer = await conn.fetch("""
-            SELECT referrer, COUNT(*) as views FROM page_views
+            SELECT referrer, COUNT(*) as views FROM page_views_clean
             WHERE created_at > NOW() - INTERVAL '7 days' AND referrer != '' AND referrer NOT LIKE '%depscope%'
             GROUP BY referrer ORDER BY views DESC LIMIT 15
         """)
@@ -2846,14 +3489,14 @@ async def admin_charts(request: Request):
         pv_hourly = await conn.fetch(
             "SELECT date_trunc('hour', created_at) as hour, COUNT(*) as views, "
             "COUNT(DISTINCT ip_address) as unique_visitors "
-            "FROM page_views WHERE created_at > NOW() - INTERVAL '3 days' "
+            "FROM page_views_clean WHERE created_at > NOW() - INTERVAL '3 days' "
             "GROUP BY hour ORDER BY hour"
         )
 
         pv_daily = await conn.fetch(
             "SELECT DATE(created_at) as day, COUNT(*) as views, "
             "COUNT(DISTINCT ip_address) as unique_visitors "
-            "FROM page_views GROUP BY day ORDER BY day"
+            "FROM page_views_clean GROUP BY day ORDER BY day"
         )
 
         api_hourly = await conn.fetch(
@@ -2884,7 +3527,7 @@ async def admin_charts(request: Request):
 
         countries_tl = await conn.fetch(
             "SELECT DATE(created_at) as day, COUNT(DISTINCT country) as countries "
-            "FROM page_views WHERE country != '' AND country IS NOT NULL "
+            "FROM page_views_clean WHERE country != '' AND country IS NOT NULL "
             "GROUP BY day ORDER BY day"
         )
 
@@ -2904,19 +3547,38 @@ async def admin_charts(request: Request):
         eco_by_day[d][r["ecosystem"]] = r["cnt"]
     ecosystems_daily = list(eco_by_day.values())
 
+    # Back-fill empty hours so sparse graphs render as a continuous timeline.
+    from datetime import datetime as _DT, timedelta as _TD, timezone as _TZ
+    now_hour = _DT.now(_TZ.utc).replace(minute=0, second=0, microsecond=0)
+    all_hours = [now_hour - _TD(hours=i) for i in range(72, -1, -1)]
+
+    pv_map = {r["hour"].astimezone(_TZ.utc).replace(tzinfo=None): r for r in pv_hourly}
+    api_map = {r["hour"].astimezone(_TZ.utc).replace(tzinfo=None): r for r in api_hourly}
+
+    pageviews_hourly_bf = []
+    api_calls_hourly_bf = []
+    for h in all_hours:
+        hn = h.replace(tzinfo=None)
+        label = h.strftime("%Y-%m-%dT%H:%M")
+        pr = pv_map.get(hn)
+        pageviews_hourly_bf.append({
+            "hour": label,
+            "views": pr["views"] if pr else 0,
+            "unique": pr["unique_visitors"] if pr else 0,
+        })
+        ar = api_map.get(hn)
+        api_calls_hourly_bf.append({
+            "hour": label,
+            "calls": ar["calls"] if ar else 0,
+        })
+
     return {
-        "pageviews_hourly": [
-            {"hour": r["hour"].strftime("%Y-%m-%dT%H:%M"), "views": r["views"], "unique": r["unique_visitors"]}
-            for r in pv_hourly
-        ],
+        "pageviews_hourly": pageviews_hourly_bf,
         "pageviews_daily": [
             {"day": str(r["day"]), "views": r["views"], "unique": r["unique_visitors"]}
             for r in pv_daily
         ],
-        "api_calls_hourly": [
-            {"hour": r["hour"].strftime("%Y-%m-%dT%H:%M"), "calls": r["calls"]}
-            for r in api_hourly
-        ],
+        "api_calls_hourly": api_calls_hourly_bf,
         "api_calls_daily": [
             {"day": str(r["day"]), "calls": r["calls"]}
             for r in api_daily
@@ -3875,3 +4537,278 @@ async def public_trending(ecosystem: str = None, limit: int = 20):
     # Cache 6h
     await cache_set(cache_key, result, ttl=6 * 3600)
     return result
+
+# --- BEGIN EMAIL TRACKING ROUTES ---
+# Paste into api/main.py
+
+from fastapi.responses import Response, RedirectResponse
+
+_PIXEL_GIF = bytes.fromhex(
+    "47494638396101000100800000000000ffffff21f90401000000002c00000000"
+    "010001000002024401003b"
+)
+
+@app.get("/t/o/{tracking_id}.gif", include_in_schema=False)
+async def track_open(tracking_id: str, request: Request):
+    try:
+        async with (await get_pool()).acquire() as conn:
+            await conn.execute(
+                "INSERT INTO email_events(tracking_id, event_type, ip, user_agent) VALUES ($1,'open',$2,$3)",
+                tracking_id,
+                request.client.host if request.client else None,
+                request.headers.get("user-agent", "")[:500],
+            )
+    except Exception:
+        pass
+    return Response(
+        content=_PIXEL_GIF,
+        media_type="image/gif",
+        headers={"Cache-Control": "no-store, no-cache, must-revalidate, private", "Pragma": "no-cache"},
+    )
+
+@app.get("/t/c/{tracking_id}", include_in_schema=False)
+async def track_click(tracking_id: str, url: str, request: Request):
+    try:
+        async with (await get_pool()).acquire() as conn:
+            await conn.execute(
+                "INSERT INTO email_events(tracking_id, event_type, url, ip, user_agent) VALUES ($1,'click',$2,$3,$4)",
+                tracking_id, url,
+                request.client.host if request.client else None,
+                request.headers.get("user-agent", "")[:500],
+            )
+    except Exception:
+        pass
+    # Whitelist: only http(s) URLs
+    if not (url.startswith("https://") or url.startswith("http://")):
+        url = "https://depscope.dev"
+    return RedirectResponse(url, status_code=302)
+
+@app.get("/api/admin/outreach-queue", include_in_schema=False)
+async def outreach_queue(request: Request, campaign: str = "launch_2026_04_20"):
+    admin_key = os.getenv("ADMIN_API_KEY", "")
+    if not admin_key or request.headers.get("x-admin-key") != admin_key:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    async with (await get_pool()).acquire() as conn:
+        rows = await conn.fetch("""
+            SELECT id, tracking_id, to_email, to_name, outlet, subject,
+                   scheduled_for, sent_at, bounce_at, reply_at, smtp_response,
+                   (SELECT COUNT(*) FROM email_events ee WHERE ee.tracking_id = oe.tracking_id AND ee.event_type='open') AS opens,
+                   (SELECT COUNT(*) FROM email_events ee WHERE ee.tracking_id = oe.tracking_id AND ee.event_type='click') AS clicks
+            FROM outreach_emails oe
+            WHERE campaign = $1
+            ORDER BY outlet, to_name
+        """, campaign)
+    def _status(r):
+        if r['bounce_at']: return 'bounced'
+        if r['reply_at']: return 'replied'
+        if r['sent_at']: return 'sent'
+        return 'queued'
+    return {
+        "count": len(rows),
+        "campaign": campaign,
+        "items": [{
+            "id": r["id"],
+            "to_name": r["to_name"],
+            "to_email": r["to_email"],
+            "outlet": r["outlet"],
+            "subject": r["subject"],
+            "scheduled_for": r["scheduled_for"].isoformat() if r["scheduled_for"] else None,
+            "sent_at": r["sent_at"].isoformat() if r["sent_at"] else None,
+            "status": _status(r),
+            "opens": r["opens"],
+            "clicks": r["clicks"],
+            "smtp": (r["smtp_response"] or "")[:200],
+        } for r in rows]
+    }
+
+
+@app.get("/api/admin/outreach-preview/{email_id}", include_in_schema=False)
+async def outreach_preview(email_id: int, request: Request):
+    admin_key = os.getenv("ADMIN_API_KEY", "")
+    if not admin_key or request.headers.get("x-admin-key") != admin_key:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+    async with (await get_pool()).acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT subject, body_md, to_email, to_name, outlet FROM outreach_emails WHERE id=$1",
+            email_id)
+    if not row:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return {
+        "to_email": row["to_email"], "to_name": row["to_name"], "outlet": row["outlet"],
+        "subject": row["subject"], "body_md": row["body_md"]
+    }
+
+
+@app.get("/api/admin/traffic-breakdown", include_in_schema=False)
+async def traffic_breakdown(request: Request, hours: int = 24):
+    admin_key = os.getenv("ADMIN_API_KEY", "")
+    if not admin_key or request.headers.get("x-admin-key") != admin_key:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    AI_UA = r"(GPTBot|OAI-SearchBot|ChatGPT-User|PerplexityBot|CCBot|ClaudeBot|anthropic-ai|Bytespider|Amazonbot|Applebot)"
+    SEARCH_UA = r"(Googlebot|GoogleOther|Google-InspectionTool|Googlebot-Image|Mediapartners|Bingbot|Slurp|DuckDuckBot|Yandex|Baiduspider)"
+    OTHER_BOT_UA = r"(AhrefsBot|SemrushBot|MJ12bot|DotBot|PetalBot|facebookexternalhit|Discordbot|TelegramBot|WhatsApp|Twitterbot|LinkedInBot|Pingdom|UptimeRobot|Site24x7|bot|crawl|spider)"
+    INTERNAL_IP = "(ip_address LIKE '10.10.%' OR ip_address LIKE '127.%' OR ip_address LIKE '37.182.176.%' OR ip_address LIKE '37.182.177.%' OR ip_address LIKE '91.134.4.%' OR ip_address IN ('::1','10.10.0.140','10.10.0.1','91.134.4.25'))"
+
+    async with (await get_pool()).acquire() as conn:
+        row = await conn.fetchrow(f"""
+            WITH w AS (SELECT * FROM page_views WHERE created_at > NOW() - INTERVAL '{hours} hours')
+            SELECT
+              COUNT(*) FILTER (WHERE {INTERNAL_IP}) AS internal,
+              COUNT(*) FILTER (WHERE NOT ({INTERNAL_IP}) AND user_agent ~* '{AI_UA}') AS ai_bots,
+              COUNT(*) FILTER (WHERE NOT ({INTERNAL_IP}) AND user_agent !~* '{AI_UA}' AND user_agent ~* '{SEARCH_UA}') AS search_bots,
+              COUNT(*) FILTER (WHERE NOT ({INTERNAL_IP}) AND user_agent !~* '{AI_UA}' AND user_agent !~* '{SEARCH_UA}' AND user_agent ~* '{OTHER_BOT_UA}') AS other_bots,
+              COUNT(*) FILTER (WHERE NOT ({INTERNAL_IP}) AND (user_agent IS NULL OR (user_agent !~* '{AI_UA}' AND user_agent !~* '{SEARCH_UA}' AND user_agent !~* '{OTHER_BOT_UA}'))) AS humans,
+              COUNT(*) AS total
+            FROM w
+        """)
+        # Hourly timeseries
+        hourly = await conn.fetch(f"""
+            WITH w AS (SELECT *, date_trunc('hour', created_at AT TIME ZONE 'UTC') AS h FROM page_views WHERE created_at > NOW() - INTERVAL '{hours} hours')
+            SELECT to_char(h, 'YYYY-MM-DD"T"HH24:MI') AS hour,
+              COUNT(*) FILTER (WHERE NOT ({INTERNAL_IP}) AND (user_agent IS NULL OR (user_agent !~* '{AI_UA}' AND user_agent !~* '{SEARCH_UA}' AND user_agent !~* '{OTHER_BOT_UA}'))) AS humans,
+              COUNT(*) FILTER (WHERE NOT ({INTERNAL_IP}) AND user_agent ~* '{AI_UA}') AS ai_bots,
+              COUNT(*) FILTER (WHERE NOT ({INTERNAL_IP}) AND user_agent !~* '{AI_UA}' AND user_agent ~* '{SEARCH_UA}') AS search_bots,
+              COUNT(*) FILTER (WHERE NOT ({INTERNAL_IP}) AND user_agent !~* '{AI_UA}' AND user_agent !~* '{SEARCH_UA}' AND user_agent ~* '{OTHER_BOT_UA}') AS other_bots,
+              COUNT(*) FILTER (WHERE {INTERNAL_IP}) AS internal
+            FROM w GROUP BY h ORDER BY h
+        """)
+    return {
+        "totals": dict(row) if row else {},
+        "hourly": [dict(r) for r in hourly],
+        "hours": hours,
+    }
+
+@app.get("/api/auth/linkedin/callback", include_in_schema=False)
+async def linkedin_callback(code: str = "", state: str = "", error: str = "", error_description: str = ""):
+    """Captures the OAuth code from LinkedIn and stores it for the admin to pick up."""
+    from fastapi.responses import HTMLResponse
+    async with (await get_pool()).acquire() as conn:
+        val = code or f"ERR:{error}:{error_description}"
+        existing = await conn.fetchval("SELECT id FROM agent_credentials WHERE platform='linkedin' LIMIT 1")
+        if existing:
+            await conn.execute("UPDATE agent_credentials SET api_key=$1, notes='oauth_code', active=true WHERE id=$2", val, existing)
+        else:
+            await conn.execute("INSERT INTO agent_credentials (platform, api_key, notes, active) VALUES ('linkedin', $1, 'oauth_code', true)", val)
+    if error:
+        body = f"<h2>Error</h2><p>{error}: {error_description}</p>"
+    elif code:
+        body = f"<h2>✓ Code captured</h2><p>Tell the ops agent: code captured, exchange it for a token.</p>"
+    else:
+        body = "<h2>No code present</h2>"
+    return HTMLResponse(f"<!doctype html><html><body style='font-family:system-ui;max-width:520px;margin:40px auto;color:#111'>{body}<p style='color:#888;font-size:13px'>You can close this tab.</p></body></html>")
+
+@app.get("/api/admin/launch-metrics", include_in_schema=False)
+async def launch_metrics(request: Request):
+    admin_key = os.getenv("ADMIN_API_KEY", "")
+    if not admin_key or request.headers.get("x-admin-key") != admin_key:
+        return JSONResponse({"error": "unauthorized"}, status_code=401)
+
+    import aiohttp
+    async with (await get_pool()).acquire() as conn:
+        # Email outreach
+        em_total = await conn.fetchval("SELECT COUNT(*) FROM outreach_emails WHERE campaign='launch_2026_04_20'")
+        em_sent = await conn.fetchval("SELECT COUNT(*) FROM outreach_emails WHERE campaign='launch_2026_04_20' AND sent_at IS NOT NULL")
+        em_bounce = await conn.fetchval("SELECT COUNT(*) FROM outreach_emails WHERE campaign='launch_2026_04_20' AND bounce_at IS NOT NULL")
+        em_reply = await conn.fetchval("SELECT COUNT(*) FROM outreach_emails WHERE campaign='launch_2026_04_20' AND reply_at IS NOT NULL")
+        em_opened = await conn.fetchval("""
+            SELECT COUNT(DISTINCT tracking_id) FROM email_events
+            WHERE event_type='open' AND tracking_id IN (SELECT tracking_id FROM outreach_emails WHERE campaign='launch_2026_04_20')
+        """)
+        em_clicked = await conn.fetchval("""
+            SELECT COUNT(DISTINCT tracking_id) FROM email_events
+            WHERE event_type='click' AND tracking_id IN (SELECT tracking_id FROM outreach_emails WHERE campaign='launch_2026_04_20')
+        """)
+
+        # API traffic (last 24h)
+        api_24h = await conn.fetchval("SELECT COUNT(*) FROM api_usage WHERE created_at > NOW() - INTERVAL '24 hours'")
+        api_total = await conn.fetchval("SELECT COUNT(*) FROM api_usage")
+        api_ips = await conn.fetchval("SELECT COUNT(DISTINCT ip_address) FROM api_usage WHERE created_at > NOW() - INTERVAL '24 hours'")
+
+    # GitHub (new account)
+    gh_stars = gh_forks = gh_watchers = 0
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as cli:
+            async with cli.get("https://api.github.com/repos/cuttalo/depscope", headers={"User-Agent": "depscope-monitor"}) as r:
+                if r.status == 200:
+                    j = await r.json()
+                    gh_stars = j.get("stargazers_count", 0)
+                    gh_forks = j.get("forks_count", 0)
+                    gh_watchers = j.get("subscribers_count", 0)
+    except Exception:
+        pass
+
+    # npm
+    npm_7d = 0
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as cli:
+            async with cli.get("https://api.npmjs.org/downloads/point/last-week/depscope-mcp") as r:
+                if r.status == 200:
+                    jj = await r.json()
+                    npm_7d = jj.get("downloads", 0)
+    except Exception:
+        pass
+
+    # Dev.to articles (both old and new)
+    devto = {"published": [], "draft_ready": False}
+    try:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as cli:
+            async with cli.get("https://dev.to/api/articles?username=depscope", headers={"api-key": os.getenv("DEVTO_API_KEY", "VuqtfNaAJifTz4h2ckG3sCdG")}) as r:
+                if r.status == 200:
+                    arts = await r.json()
+                    for a in arts:
+                        devto["published"].append({
+                            "id": a.get("id"),
+                            "title": a.get("title"),
+                            "url": a.get("url"),
+                            "views": a.get("page_views_count"),
+                            "reactions": a.get("public_reactions_count"),
+                            "comments": a.get("comments_count"),
+                        })
+    except Exception:
+        pass
+
+    # GSC
+    gsc = {"last_7d": {"clicks": 0, "impressions": 0, "avg_position": None}, "top_queries": []}
+    try:
+        async with (await get_pool()).acquire() as conn:
+            r = await conn.fetchrow("""
+                SELECT COALESCE(SUM(clicks),0) AS c, COALESCE(SUM(impressions),0) AS i,
+                       AVG(position) FILTER (WHERE impressions>0) AS p
+                FROM gsc_daily WHERE day > CURRENT_DATE - INTERVAL '7 days'
+            """)
+            gsc["last_7d"]["clicks"] = int(r["c"] or 0)
+            gsc["last_7d"]["impressions"] = int(r["i"] or 0)
+            gsc["last_7d"]["avg_position"] = float(r["p"]) if r["p"] else None
+            q = await conn.fetch("""
+                SELECT query, clicks, impressions, position
+                FROM gsc_query_top
+                WHERE day = (SELECT MAX(day) FROM gsc_query_top)
+                ORDER BY impressions DESC LIMIT 10
+            """)
+            gsc["top_queries"] = [{"query":x["query"],"clicks":x["clicks"],"impressions":x["impressions"],"position":float(x["position"]) if x["position"] else None} for x in q]
+    except Exception:
+        pass
+
+    return {
+        "gsc": gsc,
+        "email": {
+            "total_queued": em_total, "sent": em_sent, "bounced": em_bounce,
+            "opened": em_opened, "clicked": em_clicked, "replied": em_reply,
+            "open_rate": round(em_opened / em_sent * 100, 1) if em_sent else 0,
+            "click_rate": round(em_clicked / em_sent * 100, 1) if em_sent else 0,
+        },
+        "api": {
+            "calls_24h": api_24h, "calls_total": api_total, "unique_ips_24h": api_ips,
+        },
+        "github": {
+            "repo": "cuttalo/depscope",
+            "stars": gh_stars, "forks": gh_forks, "watchers": gh_watchers,
+        },
+        "npm": {"package": "depscope-mcp", "downloads_7d": npm_7d},
+        "devto": devto,
+        "ts": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(),
+    }
+
+# --- END EMAIL TRACKING ROUTES ---
+

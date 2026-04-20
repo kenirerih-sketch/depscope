@@ -117,6 +117,60 @@ class DepScope:
         """
         return self._post("/api/scan", {"ecosystem": ecosystem, "packages": packages})
 
+    # ── Security & Supply chain ─────────────────────────────────
+
+    def malicious(self, ecosystem: str, package: str) -> Dict[str, Any]:
+        """Is this package flagged as malicious by OpenSSF/OSV?
+
+        >>> ds.malicious("npm", "emteor")
+        {is_malicious: True, advisory_id: "MAL-2025-19634", ...}
+        """
+        return self._get(f"/api/malicious/{ecosystem}/{package}")
+
+    def typosquat(self, ecosystem: str, package: str) -> Dict[str, Any]:
+        """Is this a suspected typosquat of a popular package?
+
+        >>> ds.typosquat("npm", "reactt")
+        """
+        return self._get(f"/api/typosquat/{ecosystem}/{package}")
+
+    def scorecard(self, ecosystem: str, package: str) -> Dict[str, Any]:
+        """OpenSSF Scorecard security posture score (0-10) for the linked repo.
+
+        >>> ds.scorecard("npm", "express")
+        """
+        return self._get(f"/api/scorecard/{ecosystem}/{package}")
+
+    def maintainer_trust(self, ecosystem: str, package: str) -> Dict[str, Any]:
+        """Maintainer trust signals: bus factor, account ages, ownership change.
+
+        >>> ds.maintainer_trust("pypi", "django")
+        """
+        return self._get(f"/api/maintainers/{ecosystem}/{package}")
+
+    def quality(self, ecosystem: str, package: str) -> Dict[str, Any]:
+        """Quality signals: OSS criticality, download velocity, publish security.
+
+        >>> ds.quality("npm", "express")
+        """
+        return self._get(f"/api/quality/{ecosystem}/{package}")
+
+    def provenance(self, ecosystem: str, package: str) -> Dict[str, Any]:
+        """Cryptographic provenance attestations (SLSA/Sigstore).
+
+        >>> ds.provenance("npm", "next")
+        """
+        return self._get(f"/api/provenance/{ecosystem}/{package}")
+
+    def prompt(self, ecosystem: str, package: str) -> str:
+        """LLM-optimized plain-text summary (~500 tokens).
+
+        >>> print(ds.prompt("npm", "express"))
+        """
+        resp = self._client.get(f"/api/prompt/{ecosystem}/{package}")
+        resp.raise_for_status()
+        return resp.text
+
     # ── Context manager ─────────────────────────────────────────
 
     def close(self) -> None:

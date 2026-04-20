@@ -123,41 +123,89 @@ function ScoreRing({ score }: { score: number }) {
 
 const SETUP_TABS = [
   {
-    id: "claude",
+    id: "claude-code",
     label: "Claude Code",
-    file: "CLAUDE.md",
-    snippet: `## DEPSCOPE — Before any install: curl depscope.dev/api/check/{eco}/{pkg}`,
+    file: "CLAUDE.md (project or ~/.claude/CLAUDE.md)",
+    snippet: `## DEPSCOPE — before suggesting any package install
+Before recommending any npm / PyPI / Cargo / Go / Maven / NuGet / RubyGems / etc. package, call:
+  curl https://depscope.dev/api/prompt/{ecosystem}/{package}
+
+Use the returned health, CVE, and deprecation info to decide.
+The compact /api/prompt endpoint returns a ~74% smaller payload than raw registry JSON — burns fewer input tokens.
+Free, no auth, 200 req/min, 17 ecosystems. Source: https://github.com/cuttalo/depscope`,
   },
   {
     id: "cursor",
     label: "Cursor",
     file: ".cursorrules",
-    snippet: `Before any install: curl depscope.dev/api/check/{eco}/{pkg} — no auth, free`,
+    snippet: `Before recommending or installing any package, call: curl https://depscope.dev/api/prompt/{ecosystem}/{package} (ecosystems: npm, pypi, cargo, go, maven, nuget, rubygems, composer, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew). Use the returned JSON health/CVE/deprecation data to validate suggestions. Compact endpoint, no auth.
+If the package is deprecated, call /api/alternatives/{ecosystem}/{package} for a safe replacement.`,
   },
   {
     id: "windsurf",
     label: "Windsurf",
     file: ".windsurfrules",
-    snippet: `Before any install: curl depscope.dev/api/check/{eco}/{pkg}`,
+    snippet: `Before recommending any package install, call: curl https://depscope.dev/api/prompt/{ecosystem}/{package}
+Use the returned health and vulnerability info to decide. Covers npm, PyPI, Cargo, and 14 other ecosystems. Free, no auth.`,
   },
   {
     id: "copilot",
-    label: "Copilot",
+    label: "GitHub Copilot",
     file: ".github/copilot-instructions.md",
-    snippet: `Before any install: curl depscope.dev/api/check/{eco}/{pkg} — free, no auth`,
+    snippet: `## Package validation
+Before suggesting any npm / PyPI / Cargo / etc. package, check it via https://depscope.dev/api/prompt/{ecosystem}/{package}.
+If the response flags a CVE, deprecation, or "action: avoid", do not suggest that package. Prefer alternatives returned by /api/alternatives/{ecosystem}/{package}. Free, no auth.`,
+  },
+  {
+    id: "aider",
+    label: "Aider",
+    file: "conventions.md + aider --read",
+    snippet: `Dependency rule: before suggesting any package install, fetch https://depscope.dev/api/prompt/{ecosystem}/{package} and use its health + CVE data to validate the recommendation. Do not install packages with action="avoid". Covers 17 ecosystems. No auth.`,
+  },
+  {
+    id: "mcp",
+    label: "MCP server (Claude Desktop / Cursor)",
+    file: "mcp.json / claude_desktop_config.json",
+    snippet: `// Install the MCP server:
+// npm install -g depscope-mcp
+
+// Then add to your MCP client config:
+{
+  "mcpServers": {
+    "depscope": {
+      "command": "npx",
+      "args": ["depscope-mcp"]
+    }
+  }
+}
+
+// 14 tools auto-registered: check_package, get_vulnerabilities, resolve_error, find_alternatives, compare_packages, and more.
+// Your agent will call them automatically when suggesting packages.`,
   },
   {
     id: "chatgpt",
     label: "ChatGPT",
-    file: "GPT Store",
-    snippet: `Direct link: https://chatgpt.com/g/g-69e02d12226c8191a7f24f3a8481bc4e-depscope
-https://depscope.dev/openapi-gpt.json`,
+    file: "GPT Store + Custom Actions",
+    snippet: `// Option 1: use the ready-made GPT
+https://chatgpt.com/g/g-69e02d12226c8191a7f24f3a8481bc4e-depscope
+
+// Option 2: add DepScope as a custom action in your own GPT
+OpenAPI spec: https://depscope.dev/openapi-gpt.json`,
   },
   {
     id: "curl",
-    label: "Any Agent",
-    file: "curl / HTTP",
-    snippet: `curl https://depscope.dev/api/check/npm/express`,
+    label: "Any agent (HTTP)",
+    file: "raw HTTP",
+    snippet: `# Token-efficient response (74% smaller than raw registry JSON)
+curl https://depscope.dev/api/prompt/npm/express
+
+# Full structured response (when you need raw health breakdown)
+curl https://depscope.dev/api/check/npm/express
+
+# Live CVE lookup only
+curl https://depscope.dev/api/vulns/npm/express
+
+# 17 ecosystems: npm, pypi, cargo, go, maven, nuget, rubygems, composer, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew`,
   },
 ];
 

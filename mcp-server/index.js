@@ -245,6 +245,84 @@ const TOOLS = [
       required: ["query"],
     },
   },
+  {
+    name: "check_malicious",
+    description:
+      "CRITICAL SECURITY CHECK: Is this package flagged as malicious by OpenSSF/OSV community advisory feeds? Returns advisory_id, published date, and action='do_not_install' when true. Call this BEFORE ever suggesting install for any unfamiliar package — typosquat/malware detection.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+  {
+    name: "check_typosquat",
+    description:
+      "Is this package a suspected typosquat of a popular package? Returns likely legitimate targets with Damerau-Levenshtein distance and popularity ratio. Use when a package name looks close to a common one (e.g. 'reactt', 'expresss', 'requests2'). Combines with check_malicious for full protection.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+  {
+    name: "get_scorecard",
+    description:
+      "OpenSSF Scorecard security posture score (0-10) for the linked GitHub repo. Returns overall score, tier (strong/moderate/weak/poor), and list of at-risk checks (Branch-Protection, Code-Review, Pinned-Dependencies, Signed-Releases, Token-Permissions, Vulnerabilities, etc). Use to assess repo-level security hygiene.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+  {
+    name: "get_maintainer_trust",
+    description:
+      "Maintainer trust signals: bus factor (active maintainers last 3 months), contributor count, account ages, ownership-change detection, primary author dominance. Returns alerts for risks like 'new_maintainer_after_inactivity' or 'single_point_of_failure'. Critical for supply-chain threat modelling.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+  {
+    name: "get_quality",
+    description:
+      "Package quality signals: OSS criticality score (0-1 from deps.dev projectInsight), download velocity vs 4-week average (rapid_growth/growing/stable/declining/rapid_decline), publish security (npm signed/attested, PyPI trusted publisher). Use to separate serious core packages from tiny or declining ones.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+  {
+    name: "get_provenance",
+    description:
+      "Cryptographic provenance attestations (SLSA/Sigstore) for npm/PyPI packages. Confirms the package was built in a verified CI pipeline and signed. Returns attestation URL, workflow ref, builder. Use before trusting any package for production.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
 ];
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
@@ -357,6 +435,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (args.limit) qs.set("limit", String(args.limit));
         return ok(await getJson(`/api/error?${qs}`));
       }
+      case "check_malicious":
+        return ok(await getJson(`/api/malicious/${args.ecosystem}/${args.package}`));
+      case "check_typosquat":
+        return ok(await getJson(`/api/typosquat/${args.ecosystem}/${args.package}`));
+      case "get_scorecard":
+        return ok(await getJson(`/api/scorecard/${args.ecosystem}/${args.package}`));
+      case "get_maintainer_trust":
+        return ok(await getJson(`/api/maintainers/${args.ecosystem}/${args.package}`));
+      case "get_quality":
+        return ok(await getJson(`/api/quality/${args.ecosystem}/${args.package}`));
+      case "get_provenance":
+        return ok(await getJson(`/api/provenance/${args.ecosystem}/${args.package}`));
 
       default:
         return fail(`Unknown tool: ${name}`);

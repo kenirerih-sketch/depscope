@@ -78,6 +78,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/stats`, changeFrequency: "daily", priority: 0.7, lastModified: now },
     // Developer docs
     { url: `${BASE}/api-docs`, changeFrequency: "weekly", priority: 0.9, lastModified: now },
+    { url: `${BASE}/agent-setup`, changeFrequency: "weekly", priority: 0.9, lastModified: now },
     { url: `${BASE}/integrate`, changeFrequency: "weekly", priority: 0.9, lastModified: now },
     // Content
     { url: `${BASE}/report`, changeFrequency: "monthly", priority: 0.8, lastModified: now },
@@ -103,8 +104,28 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${BASE}/npm-vulnerability-scanner`, changeFrequency: "monthly", priority: 0.8, lastModified: now },
     { url: `${BASE}/supply-chain-security-api`, changeFrequency: "monthly", priority: 0.8, lastModified: now },
     { url: `${BASE}/alternatives-to-snyk-advisor`, changeFrequency: "monthly", priority: 0.8, lastModified: now },
+
+    // Ecosystem landing pages
+    { url: `${BASE}/for/npm`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
+    { url: `${BASE}/for/pypi`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
+    { url: `${BASE}/for/cargo`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
+    { url: `${BASE}/for/go`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
+    { url: `${BASE}/for/composer`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
+    { url: `${BASE}/for/maven`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
+    { url: `${BASE}/for/nuget`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
+    { url: `${BASE}/for/rubygems`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
+    { url: `${BASE}/for/pub`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
+    { url: `${BASE}/for/hex`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
+    { url: `${BASE}/for/swift`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
+    { url: `${BASE}/for/cocoapods`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
+    { url: `${BASE}/for/cpan`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
+    { url: `${BASE}/for/hackage`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
+    { url: `${BASE}/for/cran`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
+    { url: `${BASE}/for/conda`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
+    { url: `${BASE}/for/homebrew`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
     // Chinese
     { url: `${BASE}/zh`, changeFrequency: "weekly", priority: 0.8, lastModified: now },
+    { url: `${BASE}/zh/agent-setup`, changeFrequency: "weekly", priority: 0.8, lastModified: now },
     { url: `${BASE}/zh/api-docs`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
     { url: `${BASE}/zh/integrate`, changeFrequency: "weekly", priority: 0.7, lastModified: now },
     { url: `${BASE}/zh/legal`, changeFrequency: "monthly", priority: 0.4, lastModified: now },

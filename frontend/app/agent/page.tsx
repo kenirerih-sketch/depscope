@@ -599,6 +599,7 @@ export default function AgentPage() {
               {rtPendingCount} pending approval
             </button>
           )}
+          <a href="/admin/launch" style={{ color: "#22d3ee", fontSize: 13, fontWeight: 600, textDecoration: "none" }}>📊 Launch Tracker</a>
           <a href="/admin" style={{ color: "#60a5fa", fontSize: 13, textDecoration: "none" }}>Analytics</a>
           <a href="/mission-control" style={{ color: "#60a5fa", fontSize: 13, textDecoration: "none" }}>Mission Control</a>
           <button onClick={runAgent} style={{ background: "linear-gradient(135deg, #3b82f6, #8b5cf6)", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Run Agent Now</button>
