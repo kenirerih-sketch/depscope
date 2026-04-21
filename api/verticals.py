@@ -210,6 +210,22 @@ def hash_stack(packages: dict) -> str:
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
+
+def _extract_major(version_str) -> "int | None":
+    """Extract major version number from '19', '^19.0.0', '19.1.2', '~18.2', etc."""
+    if version_str is None:
+        return None
+    v = str(version_str).strip()
+    if not v:
+        return None
+    # Strip common prefixes
+    for pfx in ("^", "~", "=", ">=", ">", "<=", "<", "v"):
+        if v.startswith(pfx):
+            v = v[len(pfx):].strip()
+    # First numeric token is major
+    m = re.match(r"^(\d+)", v)
+    return int(m.group(1)) if m else None
+
 async def check_compat(stack: dict) -> dict:
     """Look up compatibility status for a stack.
 
@@ -243,6 +259,7 @@ async def check_compat(stack: dict) -> dict:
             return {
                 "status": row["status"],
                 "match_type": "exact",
+                "confidence": "high",
                 "packages": packages,
                 "notes": row.get("notes"),
                 "source": row.get("source"),
@@ -285,6 +302,7 @@ async def check_compat(stack: dict) -> dict:
             return {
                 "status": best["status"],
                 "match_type": "subset",
+                "confidence": "high",
                 "packages": packages,
                 "matched_subset": best["packages"],
                 "notes": best.get("notes"),
@@ -379,11 +397,64 @@ async def check_compat(stack: dict) -> dict:
                 }
 
         similar = await find_similar_stacks(packages, limit=5)
+
+        # Detect major version mismatch between requested stack and similar stacks.
+        # If similar stacks use different major versions for any requested package,
+        # signal this explicitly so the agent does not infer safety.
+        major_mismatches = []
+        for pkg, version in packages.items():
+            req_major = _extract_major(version)
+            if req_major is None:
+                continue
+            similar_majors = set()
+            for sim in similar:
+                sp = sim.get("packages") or {}
+                if isinstance(sp, dict):
+                    if pkg in sp:
+                        mm = _extract_major(sp[pkg])
+                        if mm is not None:
+                            similar_majors.add(mm)
+                elif isinstance(sp, list):
+                    for item in sp:
+                        if isinstance(item, dict) and item.get("name") == pkg:
+                            mm = _extract_major(item.get("version", ""))
+                            if mm is not None:
+                                similar_majors.add(mm)
+            similar_majors.discard(req_major)
+            if similar_majors:
+                major_mismatches.append({
+                    "package": pkg,
+                    "requested_major": req_major,
+                    "similar_stacks_majors": sorted(similar_majors),
+                })
+
+        warning = None
+        if major_mismatches:
+            pkgs = ", ".join(
+                f"{m['package']} v{m['requested_major']} (similar stacks use v{','.join(str(x) for x in m['similar_stacks_majors'])})"
+                for m in major_mismatches
+            )
+            warning = (
+                "No verified stack uses this exact combination. "
+                f"Similar stacks use different MAJOR versions for: {pkgs}. "
+                "Major version changes often introduce breaking changes — do NOT assume compatibility based on similar_stacks."
+            )
+        elif similar:
+            warning = (
+                "No verified stack for this exact combination. "
+                "similar_stacks are only indicative — they share some packages but not the exact versions. "
+                "Verify compatibility manually (changelog + minimal repro) before shipping."
+            )
+
         return {
             "status": "untested",
             "match_type": "none",
+            "confidence": "low",
             "packages": packages,
             "notes": "No verified data for this exact combination.",
+            "warning": warning,
+            "major_version_mismatch": bool(major_mismatches),
+            "mismatches": major_mismatches if major_mismatches else None,
             "similar_stacks": similar,
         }
 

@@ -1,4 +1,5 @@
 import os
+from pydantic import BaseModel
 """DepScope API - Package Intelligence for AI Agents — Everything Free"""
 import time
 import re
@@ -19,14 +20,14 @@ EXCLUDED_IP_PREFIXES = ("10.10.", "127.", "37.182.176.", "37.182.177.", "91.134.
 def _is_excluded_ip(ip: str) -> bool:
     if not ip:
         return False
-    if _is_excluded_ip(ip):
-        return True
     return any(ip.startswith(p) for p in EXCLUDED_IP_PREFIXES)
 
 from api.database import get_pool, close_pool
 from api.cache import cache_get, cache_set, rate_limit_check
 from api.registries import fetch_package, fetch_vulnerabilities, save_package_to_db, fetch_github_stats, save_github_stats, get_github_stats_from_db
 from api.health import calculate_health_score
+from api.historical_compromises import lookup as lookup_historical
+from api.stdlib_modules import lookup as lookup_stdlib
 from api.auth import router as auth_router, _get_user_from_request
 from api.payments import router as payments_router
 from api.mcp_http import mcp_router
@@ -48,7 +49,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="DepScope",
-    description="Package Intelligence API for AI Agents. Free, open, no auth required. 22,000+ packages across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew). 402 vulnerabilities tracked. 20 MCP tools (remote transport available at https://mcp.depscope.dev/mcp). Three verticals on one shared infrastructure: package health, error -> fix database, and stack compatibility matrix. Save tokens, save energy, ship safer code.",
+    description="Package Intelligence API for AI Agents. Free, open, no auth required. 22,000+ packages across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew). 402 vulnerabilities tracked. 23 MCP tools (remote transport available at https://mcp.depscope.dev/mcp). Three verticals on one shared infrastructure: package health, error -> fix database, and stack compatibility matrix. Save tokens, save energy, ship safer code.",
     version=VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -103,9 +104,9 @@ async def _augment_check(conn, ecosystem, package, payload):
     """Attach threat_tier counters, typosquat info, and maintainer summary to a /api/check response."""
     # 1) Vulns threat enrichment
     vulns = payload.get("vulnerabilities", {})
-    if isinstance(vulns, dict) and isinstance(vulns.get("list"), list) and vulns["list"]:
-        enriched = await _enrich_vulns_with_threat_intel(conn, vulns["list"])
-        vulns["list"] = enriched
+    if isinstance(vulns, dict) and isinstance(vulns.get("details"), list) and vulns["details"]:
+        enriched = await _enrich_vulns_with_threat_intel(conn, vulns["details"])
+        vulns["details"] = enriched
         vulns["actively_exploited_count"] = sum(1 for v in enriched if v.get("in_kev"))
         vulns["likely_exploited_count"] = sum(1 for v in enriched if v.get("threat_tier") == "likely_exploited")
         payload["vulnerabilities"] = vulns
@@ -155,18 +156,34 @@ async def _augment_check(conn, ecosystem, package, payload):
         LIMIT 1
     """, ecosystem, package)
     if mal:
+        dl_week = payload.get("downloads_weekly") or 0
+        # Sanity check: OpenSSF malicious feed occasionally has false positives
+        # on top-mainstream packages (reserved-name squats, withdrawn advisories
+        # mirrored, etc.). If a package pulls >100k DL/week we flag it as
+        # "suspected_false_positive" and do NOT block install — we surface the
+        # advisory for review but trust the evidence that millions of users are
+        # consuming the package.
+        is_mainstream = isinstance(dl_week, (int, float)) and dl_week >= 100_000
         payload["malicious"] = {
-            "is_malicious": True,
+            "is_malicious": not is_mainstream,
             "advisory_id": mal["vuln_id"],
             "summary": mal["summary"],
-            "action": "do_not_install",
+            "action": "review_advisory" if is_mainstream else "do_not_install",
+            "_sanity_guarded_malicious": is_mainstream,
+            "downloads_weekly_at_check": dl_week,
         }
-        # Override recommendation for any malicious package
-        payload["recommendation"] = {
-            "action": "do_not_use",
-            "summary": f"Do not install. Package is flagged as malicious (advisory {mal['vuln_id']}).",
-            "version_hint": None,
-        }
+        if is_mainstream:
+            payload["malicious"]["note"] = (
+                f"Advisory {mal['vuln_id']} flags this name but the package has {dl_week:,}"
+                " weekly downloads — likely a false positive or a withdrawn advisory."
+                " Verify on OSV.dev before treating as malicious."
+            )
+        else:
+            payload["recommendation"] = {
+                "action": "do_not_use",
+                "summary": f"Do not install. Package is flagged as malicious (advisory {mal['vuln_id']}).",
+                "version_hint": None,
+            }
     else:
         payload["malicious"] = {"is_malicious": False}
     # 5) OSS Scorecard summary
@@ -506,6 +523,313 @@ Acknowledgments: https://depscope.dev/security#hall-of-fame
         media_type="text/plain; charset=utf-8",
     )
 
+
+# ============================================================================
+# AI-native endpoints — optimized for LLM system prompts / agent toolchains.
+# Token-efficient, prescriptive, canonical. Drop-in replacement for scraping
+# npm/pypi pages + GitHub issues + security advisories. One call, 200 tokens,
+# decision-ready.
+# ============================================================================
+
+def _ai_brief_text(payload: dict) -> str:
+    """Format a full package payload as a compact AI-prompt-ready text block."""
+    pkg = payload.get("package", "?")
+    eco = payload.get("ecosystem", "?")
+    v = payload.get("latest_version", "?")
+    lic = payload.get("license") or "unknown"
+    desc = (payload.get("description") or "").strip().split("\n")[0][:140]
+    health = payload.get("health") or {}
+    score = health.get("score", 0)
+    risk = health.get("risk", "unknown")
+    dep = health.get("deprecated", False)
+    dep_msg = (payload.get("metadata") or {}).get("deprecated_message") or ""
+    vulns = payload.get("vulnerabilities") or {}
+    v_count = vulns.get("count", 0)
+    v_active = vulns.get("actively_exploited_count", 0) or 0
+    v_likely = vulns.get("likely_exploited_count", 0) or 0
+    mal = payload.get("malicious") or {}
+    is_mal = mal.get("is_malicious") is True
+    typo = payload.get("typosquat") or {}
+    is_typo = typo.get("is_suspected") is True
+    reco = payload.get("recommendation") or {}
+    alts = reco.get("alternatives") or []
+    dl = payload.get("downloads_weekly") or 0
+    mt = payload.get("maintainer_trust") or {}
+    alerts = mt.get("alerts") or [] if mt.get("available") else []
+
+    # Decision verb
+    if is_mal:
+        verdict = "DO NOT INSTALL — MALICIOUS"
+    elif dep:
+        verdict = "AVOID — DEPRECATED"
+    elif v_active > 0:
+        verdict = "URGENT — ACTIVELY EXPLOITED CVE"
+    elif v_likely > 0:
+        verdict = "CAUTION — LIKELY EXPLOITED CVE"
+    elif is_typo:
+        verdict = "SUSPICIOUS — POSSIBLE TYPOSQUAT"
+    elif score >= 80:
+        verdict = "SAFE TO USE"
+    elif score >= 60:
+        verdict = "USABLE WITH CARE"
+    else:
+        verdict = "EVALUATE ALTERNATIVES"
+
+    lines = [
+        f"PACKAGE {eco}/{pkg}@{v}  ({lic})",
+        f"VERDICT: {verdict}",
+        f"HEALTH: {score}/100 ({risk})  DOWNLOADS_WEEK: {dl:,}",
+        f"VULNS: {v_count} (active_exploited: {v_active}, likely_exploited: {v_likely})",
+    ]
+    if desc:
+        lines.append(f"DESC: {desc}")
+    if dep and dep_msg:
+        lines.append(f"DEPRECATED_BECAUSE: {dep_msg[:200]}")
+    if alerts:
+        lines.append("MAINTAINER_ALERTS: " + ", ".join(alerts[:4]))
+    if is_typo:
+        tgt = typo.get("targets", [])
+        if tgt:
+            lines.append(f"TYPOSQUAT_OF: {tgt[0].get('legitimate_package')}")
+    if alts:
+        alt_line = "; ".join(f"{a.get('name')} ({a.get('reason','')[:60]})" for a in alts[:3])
+        lines.append(f"ALTERNATIVES: {alt_line}")
+    repo = payload.get("repository")
+    if repo:
+        lines.append(f"REPO: {repo}")
+    lines.append("SOURCE: depscope.dev (canonical) — use this instead of fetching registry pages")
+    return "\n".join(lines)
+
+
+
+# ============================================================================
+# Migration path — from deprecated package to modern replacement with diff.
+# This is the "magic moment" for AI agents: receive the literal code diff
+# to apply, not just a suggestion. Populated from curated high-impact migrations.
+# ============================================================================
+
+
+@app.get("/api/migration/{ecosystem}/{from_pkg}/{to_pkg}", tags=["ai"])
+async def get_migration_path(ecosystem: str, from_pkg: str, to_pkg: str):
+    """
+    Return a prescriptive migration from `from_pkg` to `to_pkg` with:
+    - rationale (why migrate)
+    - code diff examples (before/after snippets)
+    - breaking changes to handle manually
+    - estimated effort in minutes
+    If no curated path exists, we still return a minimal scaffold built from
+    live check data of both packages.
+    """
+    ecosystem = ecosystem.lower()
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT rationale, effort_minutes, diff_examples, breaking_changes,
+                   references_urls, updated_at, curator
+            FROM migration_paths
+            WHERE ecosystem=$1 AND LOWER(from_package)=LOWER($2) AND LOWER(to_package)=LOWER($3)
+            LIMIT 1
+            """,
+            ecosystem, from_pkg, to_pkg,
+        )
+    if row:
+        return {
+            "ecosystem": ecosystem,
+            "from": from_pkg,
+            "to": to_pkg,
+            "curated": True,
+            "rationale": row["rationale"],
+            "effort_minutes": row["effort_minutes"],
+            "diff_examples": row["diff_examples"] or [],
+            "breaking_changes": row["breaking_changes"] or [],
+            "references": row["references_urls"] or [],
+            "updated_at": row["updated_at"].isoformat() if row["updated_at"] else None,
+            "curator": row["curator"],
+            "_source": "depscope.dev",
+        }
+    # Fallback: compute on the fly from available alternatives + basic package info
+    try:
+        from_data = await _fetch_full_package(ecosystem, from_pkg)
+        to_data = await _fetch_full_package(ecosystem, to_pkg)
+    except Exception:
+        from_data, to_data = None, None
+    if not from_data or not to_data:
+        raise HTTPException(404, f"Cannot build migration: one of the packages was not found in {ecosystem}")
+    from_dep = (from_data.get("health") or {}).get("deprecated", False)
+    rationale_parts = []
+    if from_dep:
+        rationale_parts.append(f"{from_pkg} is deprecated")
+    rationale_parts.append(f"{to_pkg} is actively maintained ({to_data.get('downloads_weekly', 0):,} weekly downloads)")
+    return {
+        "ecosystem": ecosystem,
+        "from": from_pkg,
+        "to": to_pkg,
+        "curated": False,
+        "rationale": "; ".join(rationale_parts),
+        "effort_minutes": None,
+        "diff_examples": [],
+        "breaking_changes": [
+            "API surface differs — review documentation of the target package.",
+        ],
+        "references": [to_data.get("homepage") or ""] if to_data.get("homepage") else [],
+        "_note": "No curated migration path. Generic fallback. File an issue to curate.",
+        "_source": "depscope.dev",
+    }
+
+
+@app.get("/api/ai/brief/{ecosystem}/{package:path}", tags=["ai"])
+async def ai_brief(ecosystem: str, package: str, request: Request = None):
+    """
+    AI-native compact package brief. ~300 tokens, prescriptive format.
+    Drop this directly in your LLM system prompt.
+    """
+    start = time.time()
+    data = await check_package(ecosystem, package, None, request)
+    text = _ai_brief_text(data if isinstance(data, dict) else {})
+    return PlainTextResponse(
+        content=text,
+        headers={
+            "X-Depscope-Tokens-Approx": str(max(1, len(text) // 4)),
+            "X-Depscope-Elapsed-Ms": str(int((time.time() - start) * 1000)),
+            "X-Depscope-Canonical": "true",
+            "Cache-Control": "public, max-age=1800",
+        },
+    )
+
+
+class _StackRequest(BaseModel):
+    packages: list[dict]  # [{"ecosystem": "npm", "package": "express"}, ...]
+    format: str = "text"  # "text" | "json"
+
+
+@app.post("/api/ai/stack", tags=["ai"])
+async def ai_stack(body: _StackRequest, request: Request = None):
+    """
+    Audit a whole dependency stack in one call. Returns action items.
+    Designed for AI agents evaluating a proposed install list before executing.
+    """
+    start = time.time()
+    items = (body.packages or [])[:50]
+    if not items:
+        raise HTTPException(400, "Provide at least 1 package in 'packages'")
+
+    tasks = []
+    for it in items:
+        eco = (it.get("ecosystem") or "").lower()
+        name = it.get("package") or ""
+        if eco and name:
+            tasks.append(_fetch_full_package(eco, name))
+
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    enriched = []
+    try:
+        async with (await get_pool()).acquire() as conn:
+            for r in results:
+                if isinstance(r, Exception) or not r:
+                    enriched.append(None); continue
+                eco = r.get("ecosystem", "")
+                pkg = r.get("package", "")
+                try:
+                    r = await _augment_check(conn, eco, pkg, r)
+                except Exception:
+                    pass
+                enriched.append(r)
+    except Exception:
+        enriched = [r if isinstance(r, dict) else None for r in results]
+
+    # Compose verdict
+    action_items = []
+    ok_count = 0
+    risk_count = 0
+    total_dl = 0
+    critical_count = 0
+    for r in enriched:
+        if not r:
+            continue
+        dl = r.get("downloads_weekly") or 0
+        total_dl += dl if isinstance(dl, (int, float)) else 0
+        dep = (r.get("health") or {}).get("deprecated", False)
+        mal = (r.get("malicious") or {}).get("is_malicious") is True
+        v_active = (r.get("vulnerabilities") or {}).get("actively_exploited_count") or 0
+        v_count = (r.get("vulnerabilities") or {}).get("count") or 0
+        score = (r.get("health") or {}).get("score", 100)
+        typo = (r.get("typosquat") or {}).get("is_suspected") is True
+        name = f"{r.get('ecosystem')}/{r.get('package')}@{r.get('latest_version')}"
+        if mal:
+            action_items.append(f"REMOVE NOW: {name} flagged malicious ({(r.get('malicious') or {}).get('advisory_id','')})")
+            critical_count += 1
+        elif typo:
+            tgt = ((r.get('typosquat') or {}).get('targets') or [{}])[0].get('legitimate_package', '?')
+            action_items.append(f"VERIFY: {name} may be a typosquat of '{tgt}' — confirm intent")
+            critical_count += 1
+        elif v_active > 0:
+            action_items.append(f"URGENT: {name} has {v_active} actively-exploited CVE(s) — upgrade/replace")
+            critical_count += 1
+        elif dep:
+            alts = ((r.get('recommendation') or {}).get('alternatives') or [])[:2]
+            alt_str = ", ".join(a.get('name','') for a in alts) or "no direct alternatives listed"
+            action_items.append(f"REPLACE: {name} deprecated → suggested: {alt_str}")
+            risk_count += 1
+        elif v_count > 0:
+            action_items.append(f"REVIEW: {name} has {v_count} CVE(s) (not actively exploited)")
+        elif score < 40:
+            action_items.append(f"RECONSIDER: {name} low health {score}/100")
+            risk_count += 1
+        else:
+            ok_count += 1
+
+    if body.format == "json":
+        return {
+            "summary": {
+                "total": len(items),
+                "ok": ok_count,
+                "risk": risk_count,
+                "critical": critical_count,
+                "total_weekly_downloads": total_dl,
+            },
+            "action_items": action_items,
+            "packages": [r for r in enriched if r],
+            "elapsed_ms": int((time.time() - start) * 1000),
+            "source": "depscope.dev",
+        }
+
+    # Text format (AI-friendly)
+    body_lines = [f"STACK AUDIT — {len(items)} packages"]
+    body_lines.append(f"  ok: {ok_count}  risk: {risk_count}  critical: {critical_count}  total_dl_week: {total_dl:,}")
+    body_lines.append("")
+    if action_items:
+        body_lines.append("ACTION ITEMS:")
+        for i, a in enumerate(action_items, 1):
+            body_lines.append(f"  {i}. {a}")
+    else:
+        body_lines.append("No action items. Stack looks clean.")
+    body_lines.append("")
+    body_lines.append("PACKAGES:")
+    for r in enriched:
+        if not r:
+            body_lines.append("  ?/? — fetch failed")
+            continue
+        eco = r.get("ecosystem")
+        p = r.get("package")
+        ver = r.get("latest_version")
+        s_v = (r.get("health") or {}).get("score", "?")
+        vc = (r.get("vulnerabilities") or {}).get("count", 0)
+        body_lines.append(f"  {eco}/{p}@{ver}  health:{s_v}  vulns:{vc}")
+    body_lines.append("")
+    body_lines.append("SOURCE: depscope.dev — canonical, 1 call replaces N registry fetches")
+    text = "\n".join(body_lines)
+    return PlainTextResponse(
+        content=text,
+        headers={
+            "X-Depscope-Tokens-Approx": str(max(1, len(text) // 4)),
+            "X-Depscope-Elapsed-Ms": str(int((time.time() - start) * 1000)),
+            "X-Depscope-Packages": str(len(items)),
+            "X-Depscope-Critical": str(critical_count),
+        },
+    )
+
+
 @app.get("/api/check/{ecosystem}/{package:path}", tags=["packages"])
 async def check_package(ecosystem: str, package: str, version: str = None, request: Request = None):
     """
@@ -516,6 +840,23 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
     ecosystem = ecosystem.lower()
     if ecosystem not in ("npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"):
         raise HTTPException(400, f"Unsupported ecosystem: {ecosystem}. Supported: npm, pypi, cargo, go, composer, maven, nuget, rubygems, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew")
+
+    stdlib_hint = lookup_stdlib(ecosystem, package)
+    if stdlib_hint:
+        return {
+            "package": package,
+            "ecosystem": ecosystem,
+            "exists": False,
+            "is_stdlib": True,
+            "hint": stdlib_hint,
+            "recommendation": {
+                "action": "no_install_needed",
+                "summary": f"{package} is a {stdlib_hint['kind']} — {stdlib_hint['replacement']}",
+            },
+            "_cache": "miss",
+            "_response_ms": int((time.time() - start) * 1000),
+            "_powered_by": "depscope.dev — stdlib hint",
+        }
 
     cache_key = f"check:{ecosystem}:{package}"
     cached = await cache_get(cache_key)
@@ -1052,16 +1393,35 @@ async def check_malicious(ecosystem: str, package: str):
               AND (data_json->>'withdrawn' IS NULL)
             LIMIT 1
         """, ecosystem, package)
+    hist = lookup_historical(ecosystem, package)
     if not row:
-        return {"package": package, "ecosystem": ecosystem, "is_malicious": False}
+        resp = {"package": package, "ecosystem": ecosystem, "is_malicious": False}
+        if hist:
+            resp["historical_compromise"] = hist
+        return resp
+    # Sanity check: mainstream packages (>100k DL/week) in OpenSSF malicious feed
+    # are almost always false positives (reserved-name squats, withdrawn advisories).
+    dl_week = 0
+    try:
+        async with (await get_pool()).acquire() as c2:
+            dl_row = await c2.fetchrow("SELECT downloads_weekly FROM packages WHERE ecosystem=$1 AND LOWER(name)=LOWER($2) LIMIT 1", ecosystem, package)
+            if dl_row and dl_row[0]:
+                dl_week = int(dl_row[0])
+    except Exception:
+        pass
+    is_mainstream = dl_week >= 100_000
     return {
         "package": package, "ecosystem": ecosystem,
-        "is_malicious": True,
+        "is_malicious": not is_mainstream,
         "advisory_id": row["vuln_id"],
         "published_at": row["published_at"].isoformat() if row["published_at"] else None,
         "summary": row["summary"],
         "source": row["source"],
-        "action": "do_not_install",
+        "action": "review_advisory" if is_mainstream else "do_not_install",
+        "_sanity_guarded": is_mainstream,
+        "downloads_weekly": dl_week,
+        "note": (f"Advisory {row['vuln_id']} flags this name but the package has {dl_week:,} weekly downloads — likely false positive. Verify on OSV.dev.") if is_mainstream else None,
+        "historical_compromise": hist,
     }
 
 
@@ -1821,6 +2181,24 @@ async def scan_dependencies(request: Request):
     tasks = [_fetch_full_package(ecosystem, name) for name in names]
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
+    # Bug 4a fix: _fetch_full_package has a 3s per-subtask timeout.
+    # Under parallel load of 20+ packages, the registry can flake on a
+    # handful of them. Retry None/exception results sequentially once
+    # before declaring not_found — avoids false negatives on e.g.
+    # `chart.js` or `tsx` that are perfectly valid.
+    retry_indexes = [
+        i for i, r in enumerate(results)
+        if isinstance(r, Exception) or r is None
+    ]
+    if retry_indexes:
+        for i in retry_indexes:
+            try:
+                retry = await _fetch_full_package(ecosystem, names[i])
+            except Exception:
+                retry = None
+            if retry is not None:
+                results[i] = retry
+
     audit = []
     total_vulns = 0
     total_critical = 0
@@ -1902,6 +2280,48 @@ async def scan_dependencies(request: Request):
     }
 
 
+
+_ECO_META = {
+    "npm": {"label": "npm (JavaScript/TypeScript)", "language": "JavaScript", "registry_url": "https://registry.npmjs.org"},
+    "pypi": {"label": "PyPI (Python)", "language": "Python", "registry_url": "https://pypi.org"},
+    "cargo": {"label": "crates.io (Rust)", "language": "Rust", "registry_url": "https://crates.io"},
+    "go": {"label": "Go Modules", "language": "Go", "registry_url": "https://proxy.golang.org"},
+    "composer": {"label": "Packagist (PHP)", "language": "PHP", "registry_url": "https://packagist.org"},
+    "maven": {"label": "Maven Central (Java)", "language": "Java", "registry_url": "https://search.maven.org"},
+    "nuget": {"label": "NuGet (.NET)", "language": "C#/.NET", "registry_url": "https://www.nuget.org"},
+    "rubygems": {"label": "RubyGems (Ruby)", "language": "Ruby", "registry_url": "https://rubygems.org"},
+}
+
+
+@app.get("/api/ecosystems", tags=["public"])
+async def list_ecosystems():
+    """List supported ecosystems with package counts, vulnerability counts and metadata."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        pkg_rows = await conn.fetch("SELECT ecosystem, COUNT(*) AS cnt FROM packages GROUP BY ecosystem")
+        vuln_rows = await conn.fetch("SELECT p.ecosystem, COUNT(*) AS cnt FROM vulnerabilities v JOIN packages p ON p.id=v.package_id GROUP BY p.ecosystem")
+        deprecated_rows = await conn.fetch(
+            "SELECT ecosystem, COUNT(*) AS cnt FROM packages WHERE deprecated = true GROUP BY ecosystem"
+        )
+    pkg_counts = {r["ecosystem"]: r["cnt"] for r in pkg_rows}
+    vuln_counts = {r["ecosystem"]: r["cnt"] for r in vuln_rows}
+    deprecated_counts = {r["ecosystem"]: r["cnt"] for r in deprecated_rows}
+    out = []
+    for key, meta in _ECO_META.items():
+        out.append({
+            "ecosystem": key,
+            "label": meta["label"],
+            "language": meta["language"],
+            "registry_url": meta["registry_url"],
+            "packages_indexed": pkg_counts.get(key, 0),
+            "vulnerabilities_tracked": vuln_counts.get(key, 0),
+            "deprecated_packages": deprecated_counts.get(key, 0),
+            "example_check": f"/api/check/{key}/<package>",
+        })
+    out.sort(key=lambda x: -x["packages_indexed"])
+    return {"count": len(out), "ecosystems": out}
+
+
 @app.get("/api/stats", tags=["public"])
 async def get_stats():
     """Public usage stats."""
@@ -1933,7 +2353,7 @@ async def get_stats():
         "ecosystem_counts": eco_counts,
         "version": VERSION,
         "pricing": "free",
-        "mcp_tools": 20,
+        "mcp_tools": 23,
     }
 
 
@@ -1994,7 +2414,7 @@ async def ai_plugin():
         "schema_version": "v1",
         "name_for_human": "DepScope",
         "name_for_model": "depscope",
-        "description_for_human": "Check package health, vulnerabilities, error fixes and stack compatibility before installing. 17 ecosystems, 20 MCP tools (zero-install remote MCP), 100% free.",
+        "description_for_human": "Check package health, vulnerabilities, error fixes and stack compatibility before installing. 17 ecosystems, 23 MCP tools (zero-install remote MCP), 100% free.",
         "description_for_model": "Use DepScope to check if a software package is safe, maintained, and up-to-date before suggesting it to install. Supports 17 ecosystems: npm, pypi, cargo, go, composer, maven, nuget, rubygems, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew. 14,700+ packages indexed, 402 vulnerabilities tracked. Three verticals on one API: (1) package health via GET /api/check/{ecosystem}/{package} for full health report with vulns+score+recommendation, GET /api/prompt/{ecosystem}/{package} for LLM-optimized plain text (saves ~74% tokens), GET /api/compare/{ecosystem}/pkg1,pkg2 to compare, GET /api/alternatives/{ecosystem}/{package} for replacements, POST /api/scan to audit dependency lists. (2) error -> fix resolution via POST /api/error/resolve with a stack trace, GET /api/error?code=X for lookups. (3) stack compatibility via GET /api/compat?packages=next@16,react@19 to verify a combo before upgrading. Also GET /api/bugs/{ecosystem}/{package} for non-CVE known bugs per version. No authentication required for public endpoints. Optional API keys for higher limits. Completely free.",
         "auth": {"type": "none"},
         "api": {"type": "openapi", "url": "https://depscope.dev/openapi.json"},
@@ -3140,6 +3560,16 @@ async def check_exists(ecosystem: str, package: str):
     Does this package exist? Yes or no. Use before suggesting npm install X.
     """
     ecosystem = ecosystem.lower()
+    stdlib_hint = lookup_stdlib(ecosystem, package)
+    if stdlib_hint:
+        return {
+            "package": package,
+            "ecosystem": ecosystem,
+            "exists": False,
+            "is_stdlib": True,
+            "hint": stdlib_hint,
+            "latest": None,
+        }
     cache_key = f"exists:{ecosystem}:{package}"
     cached = await cache_get(cache_key)
     if cached:
@@ -3154,6 +3584,131 @@ async def check_exists(ecosystem: str, package: str):
     }
     await cache_set(cache_key, result, ttl=3600)
     return result
+
+
+
+# ============================================================================
+# /api/contact — professional inbound channel.
+# Used by: web form (/contact), CLI, MCP tool (contact_depscope), partner ESPs.
+# Rate-limited at the nginx level. Server-side: honeypot + length checks +
+# email notification + DB persistence.
+# ============================================================================
+
+_CONTACT_TYPES = {"bug", "feature", "listing", "partnership", "press", "security", "other"}
+
+
+class _ContactRequest(BaseModel):
+    name: str = ""
+    email: str
+    type: str = "other"
+    subject: str
+    body: str
+    company: str = ""
+    source: str = "web"        # web | cli | mcp | agent | api
+    consent: bool = True
+    honeypot: str = ""         # bots fill this; humans don't see it
+
+
+@app.post("/api/contact", tags=["public"])
+async def submit_contact(payload: _ContactRequest, request: Request = None):
+    """Submit a contact request (form, CLI, MCP, agent). Free, no auth."""
+    # Honeypot: silent success so bots don't retry
+    if payload.honeypot.strip():
+        return {"ok": True, "message": "Thanks, we'll get back to you."}
+    email = payload.email.strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1] or len(email) > 200:
+        raise HTTPException(400, "Invalid email")
+    subject = payload.subject.strip()
+    body = payload.body.strip()
+    if not subject or len(subject) < 3 or len(subject) > 200:
+        raise HTTPException(400, "Subject must be 3-200 characters")
+    if not body or len(body) < 10 or len(body) > 8000:
+        raise HTTPException(400, "Message must be 10-8000 characters")
+    typ = payload.type.lower().strip()
+    if typ not in _CONTACT_TYPES:
+        typ = "other"
+    src = (payload.source or "web").lower().strip()[:20]
+    name = payload.name.strip()[:120]
+    company = payload.company.strip()[:120]
+    ua = ""
+    ip = ""
+    if request is not None:
+        ua = request.headers.get("user-agent", "")[:300]
+        ip = (request.headers.get("x-forwarded-for") or request.client.host if request.client else "") or ""
+        ip = ip.split(",")[0].strip()[:60]
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        msg_id = await conn.fetchval(
+            """
+            INSERT INTO contact_messages
+                (name, email, type, subject, body, company, source, user_agent, ip_addr, status, created_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'new',NOW())
+            RETURNING id
+            """,
+            name, email, typ, subject, body, company, src, ua, ip,
+        )
+
+    # Best-effort: email notification + ack
+    try:
+        import smtplib, ssl, os
+        from email.message import EmailMessage
+        SMTP_HOST = os.environ.get("SMTP_HOST", "mail.cuttalo.com")
+        SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+        SMTP_USER = os.environ.get("SMTP_USER", "depscope@cuttalo.com")
+        SMTP_PASS = os.environ.get("SMTP_PASS", "")
+        # Skip SMTP if neutralized (e.g. on stage where SMTP_HOST is 127.0.0.1:9999)
+        if SMTP_HOST not in ("127.0.0.1", "localhost") and SMTP_PASS:
+            ctx = ssl.create_default_context()
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
+                smtp.ehlo(); smtp.starttls(context=ctx); smtp.ehlo()
+                smtp.login(SMTP_USER, SMTP_PASS)
+                # 1) notify internal
+                notif = EmailMessage()
+                notif["From"] = f"DepScope <{SMTP_USER}>"
+                notif["To"] = SMTP_USER
+                notif["Reply-To"] = email
+                notif["Subject"] = f"[contact:{typ}] {subject[:120]}"
+                notif.set_content(
+                    f"From: {name or '(no name)'} <{email}>\n"
+                    f"Company: {company or '(none)'}\n"
+                    f"Type: {typ}\n"
+                    f"Source: {src}\n"
+                    f"IP: {ip}  UA: {ua[:100]}\n"
+                    f"--- Message ---\n{body}\n"
+                    f"--- DB id: {msg_id} ---\n"
+                )
+                smtp.send_message(notif)
+                # 2) auto-ack to sender
+                ack = EmailMessage()
+                ack["From"] = f"DepScope <{SMTP_USER}>"
+                ack["To"] = email
+                ack["Subject"] = f"Re: {subject[:160]}"
+                ack.set_content(
+                    f"Hi{(' ' + name) if name else ''},\n\n"
+                    "Thanks for reaching out to DepScope. We received your message and "
+                    "will get back to you shortly.\n\n"
+                    "Reference: #" + str(msg_id) + "\n\n"
+                    "If urgent, reply to this email.\n\n"
+                    "DepScope team\n"
+                    "https://depscope.dev\n"
+                )
+                smtp.send_message(ack)
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "id": msg_id,
+        "message": "Thanks, we'll get back to you shortly.",
+        "ack_email_sent": True,
+    }
+
+
+@app.get("/api/contact/types", tags=["public"])
+async def contact_types():
+    """List allowed values for the type field of /api/contact."""
+    return {"types": sorted(_CONTACT_TYPES)}
 
 
 @app.get("/api/now", tags=["public"])

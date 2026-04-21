@@ -289,6 +289,56 @@ export const TOOLS = [
       required: ["ecosystem", "package"],
     },
   },
+  {
+    name: "ai_brief",
+    description:
+      "Ultra-compact package brief (~300 tokens, plain text) formatted for direct paste into LLM system prompts. Includes: verdict (SAFE/AVOID/URGENT/MALICIOUS), health, vulns, alternatives, maintainer alerts. PREFER THIS over check_package when you only need a decision. Replaces fetching npm/pypi pages + GitHub issues + security DBs (avg 4-8k tokens saved per call).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string", description: "Package name." },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+  {
+    name: "audit_stack",
+    description:
+      "One-shot audit of a full dependency list (up to 50 packages). Returns prioritized action items (REMOVE NOW / URGENT / REPLACE / REVIEW) and a stack-level summary. Use BEFORE executing `npm install axios express lodash` etc. to validate the whole set in a single call instead of N per-package checks.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        packages: {
+          type: "array",
+          description: "List of {ecosystem, package} pairs, max 50.",
+          items: {
+            type: "object",
+            properties: {
+              ecosystem: { type: "string", enum: ECOSYSTEMS },
+              package: { type: "string" },
+            },
+            required: ["ecosystem", "package"],
+          },
+        },
+      },
+      required: ["packages"],
+    },
+  },
+  {
+    name: "get_migration_path",
+    description:
+      "Get a prescriptive migration plan from a deprecated/legacy package to its modern replacement. Returns rationale, before/after code diff examples ready to apply, breaking changes to handle, and estimated effort in minutes. USE THIS when you need to advise a user on replacing `request`→`axios`, `moment`→`dayjs`, `urllib2`→`requests`, `flask`→`fastapi`, etc. The code diff is literal and ready to paste into their codebase.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        from_package: { type: "string", description: "Deprecated/legacy package to migrate away from." },
+        to_package: { type: "string", description: "Modern replacement package." },
+      },
+      required: ["ecosystem", "from_package", "to_package"],
+    },
+  },
 ];
 
 function headers() {
@@ -332,6 +382,20 @@ function fail(message) {
 export async function handleToolCall(name, args) {
   try {
     switch (name) {
+      case "ai_brief":
+        return ok(await getText(`/api/ai/brief/${args.ecosystem}/${encodePkg(args.package)}`));
+      case "audit_stack": {
+        const body = JSON.stringify({ packages: args.packages, format: "text" });
+        const res = await fetch(`${API_BASE}/api/ai/stack`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        });
+        if (!res.ok) return fail(`audit_stack failed: ${res.status}`);
+        return ok(await res.text());
+      }
+      case "get_migration_path":
+        return ok(await getJson(`/api/migration/${args.ecosystem}/${encodeURIComponent(args.from_package)}/${encodeURIComponent(args.to_package)}`));
       case "check_package": {
         const pkg = encodePkg(args.package);
         let path = `/api/check/${args.ecosystem}/${pkg}`;

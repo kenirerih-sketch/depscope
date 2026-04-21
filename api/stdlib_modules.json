@@ -1,0 +1,90 @@
+{
+  "_meta": {
+    "schema_version": 1,
+    "description": "Names that LLMs frequently emit as `pip install X` or `npm install X` but are actually language builtins/stdlib. Used by /check_package, /package_exists and /ai_brief to return an educational hint instead of a bare 404.",
+    "last_updated": "2026-04-21"
+  },
+  "pypi": {
+    "urllib2": {
+      "kind": "python2_stdlib",
+      "replacement": "urllib.request (Python 3 stdlib) or requests (PyPI)",
+      "note": "Python 2 stdlib module. Removed in Python 3 — use urllib.request for simple fetches or the `requests` package for ergonomic HTTP."
+    },
+    "urlparse": {
+      "kind": "python2_stdlib",
+      "replacement": "urllib.parse",
+      "note": "Python 2 stdlib module. In Python 3, import from `urllib.parse`."
+    },
+    "httplib": {
+      "kind": "python2_stdlib",
+      "replacement": "http.client",
+      "note": "Python 2 stdlib module. In Python 3, use `http.client`."
+    },
+    "ConfigParser": {
+      "kind": "python2_stdlib",
+      "replacement": "configparser (lowercase) — stdlib in Python 3",
+      "note": "Python 2 stdlib. In Python 3 the module is lowercase `configparser`."
+    },
+    "Queue": {
+      "kind": "python2_stdlib",
+      "replacement": "queue (lowercase) — stdlib in Python 3",
+      "note": "Python 2 stdlib. In Python 3 use lowercase `queue`."
+    },
+    "thread": {
+      "kind": "python2_stdlib",
+      "replacement": "_thread or threading (Python 3 stdlib)",
+      "note": "Python 2 low-level thread module. In Python 3 it is `_thread`; for most code use `threading`."
+    },
+    "cStringIO": {
+      "kind": "python2_stdlib",
+      "replacement": "io.StringIO / io.BytesIO",
+      "note": "Python 2 only. In Python 3 use `io.StringIO` (text) or `io.BytesIO` (bytes)."
+    },
+    "md5": {"kind": "python2_stdlib", "replacement": "hashlib.md5"},
+    "sha": {"kind": "python2_stdlib", "replacement": "hashlib.sha1"},
+    "SocketServer": {"kind": "python2_stdlib", "replacement": "socketserver"},
+    "BaseHTTPServer": {"kind": "python2_stdlib", "replacement": "http.server"},
+    "SimpleHTTPServer": {"kind": "python2_stdlib", "replacement": "http.server"},
+    "CGIHTTPServer": {"kind": "python2_stdlib", "replacement": "http.server (CGIHTTPRequestHandler)"},
+    "Tkinter": {"kind": "python2_stdlib", "replacement": "tkinter (lowercase in Python 3)"},
+    "StringIO": {"kind": "python2_stdlib", "replacement": "io.StringIO"}
+  },
+  "npm": {
+    "fs": {
+      "kind": "node_builtin",
+      "replacement": "node:fs (builtin, no install needed)",
+      "note": "Node.js core module. Use `import fs from 'node:fs'` or `const fs = require('fs')` — no npm install required."
+    },
+    "path": {"kind": "node_builtin", "replacement": "node:path"},
+    "http": {"kind": "node_builtin", "replacement": "node:http"},
+    "https": {"kind": "node_builtin", "replacement": "node:https"},
+    "crypto": {"kind": "node_builtin", "replacement": "node:crypto"},
+    "os": {"kind": "node_builtin", "replacement": "node:os"},
+    "url": {"kind": "node_builtin", "replacement": "node:url (or the builtin URL global)"},
+    "util": {"kind": "node_builtin", "replacement": "node:util"},
+    "stream": {"kind": "node_builtin", "replacement": "node:stream"},
+    "events": {"kind": "node_builtin", "replacement": "node:events"},
+    "buffer": {"kind": "node_builtin", "replacement": "node:buffer (or the global Buffer)"},
+    "child_process": {"kind": "node_builtin", "replacement": "node:child_process"},
+    "readline": {"kind": "node_builtin", "replacement": "node:readline"},
+    "net": {"kind": "node_builtin", "replacement": "node:net"},
+    "tls": {"kind": "node_builtin", "replacement": "node:tls"},
+    "dns": {"kind": "node_builtin", "replacement": "node:dns"},
+    "zlib": {"kind": "node_builtin", "replacement": "node:zlib"},
+    "assert": {"kind": "node_builtin", "replacement": "node:assert"},
+    "process": {"kind": "node_builtin", "replacement": "node:process (or global process)"},
+    "querystring": {"kind": "node_builtin", "replacement": "node:querystring (prefer URLSearchParams)"},
+    "worker_threads": {"kind": "node_builtin", "replacement": "node:worker_threads"},
+    "perf_hooks": {"kind": "node_builtin", "replacement": "node:perf_hooks"}
+  },
+  "go": {
+    "fmt": {"kind": "go_stdlib", "replacement": "stdlib — just `import \"fmt\"`"},
+    "net/http": {"kind": "go_stdlib", "replacement": "stdlib — `import \"net/http\"`"},
+    "encoding/json": {"kind": "go_stdlib", "replacement": "stdlib — `import \"encoding/json\"`"},
+    "context": {"kind": "go_stdlib", "replacement": "stdlib — `import \"context\"`"},
+    "sync": {"kind": "go_stdlib", "replacement": "stdlib"},
+    "io": {"kind": "go_stdlib", "replacement": "stdlib"},
+    "os": {"kind": "go_stdlib", "replacement": "stdlib"},
+    "errors": {"kind": "go_stdlib", "replacement": "stdlib"}
+  }
+}

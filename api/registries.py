@@ -67,6 +67,46 @@ async def fetch_npm_downloads(name: str) -> int:
         return 0
 
 
+
+_PYPI_CLASSIFIER_MAP = {
+    "License :: OSI Approved :: MIT License": "MIT",
+    "License :: OSI Approved :: Apache Software License": "Apache-2.0",
+    "License :: OSI Approved :: BSD License": "BSD-3-Clause",
+    "License :: OSI Approved :: BSD": "BSD-3-Clause",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)": "GPL-3.0",
+    "License :: OSI Approved :: GNU General Public License v2 (GPLv2)": "GPL-2.0",
+    "License :: OSI Approved :: GNU Lesser General Public License v3 (LGPLv3)": "LGPL-3.0",
+    "License :: OSI Approved :: GNU Lesser General Public License v2 (LGPLv2)": "LGPL-2.1",
+    "License :: OSI Approved :: Mozilla Public License 2.0 (MPL 2.0)": "MPL-2.0",
+    "License :: OSI Approved :: ISC License (ISCL)": "ISC",
+    "License :: OSI Approved :: Python Software Foundation License": "PSF-2.0",
+    "License :: OSI Approved :: The Unlicense (Unlicense)": "Unlicense",
+    "License :: OSI Approved :: Zope Public License": "ZPL-2.1",
+    "License :: CC0 1.0 Universal (CC0 1.0) Public Domain Dedication": "CC0-1.0",
+    "License :: Public Domain": "Public Domain",
+}
+
+
+def _pypi_license_from_info(info: dict) -> str:
+    """Resolve PyPI license with fallback: license field -> license_expression -> classifiers."""
+    raw = (info.get("license") or "").strip()
+    if raw and len(raw) < 80 and "\n" not in raw:
+        return raw
+    expr = (info.get("license_expression") or "").strip()
+    if expr:
+        return expr
+    for cls in info.get("classifiers") or []:
+        if cls in _PYPI_CLASSIFIER_MAP:
+            return _PYPI_CLASSIFIER_MAP[cls]
+        if cls.startswith("License :: OSI Approved :: "):
+            return cls.replace("License :: OSI Approved :: ", "").replace(" License", "")
+        if cls.startswith("License :: "):
+            tail = cls.replace("License :: ", "")
+            if "::" not in tail:
+                return tail
+    return raw or ""
+
+
 async def fetch_pypi(name: str) -> dict | None:
     url = f"{REGISTRIES['pypi']}/{name}/json"
     async with aiohttp.ClientSession() as session:
@@ -111,7 +151,7 @@ async def fetch_pypi(name: str) -> dict | None:
         "name": name,
         "latest_version": info.get("version", ""),
         "description": info.get("summary", ""),
-        "license": info.get("license", ""),
+        "license": _pypi_license_from_info(info),
         "homepage": info.get("home_page", "") or info.get("project_url", ""),
         "repository": _extract_pypi_repo(info),
         "downloads_weekly": downloads_weekly,
@@ -169,8 +209,40 @@ async def fetch_cargo(name: str) -> dict | None:
 
 
 
+
+async def _resolve_go_shortname(name: str) -> str:
+    """Short name (no slash) -> full Go module path via GitHub search."""
+    if "/" in name:
+        return name
+    import os
+    gh_tok = os.environ.get("GH_TOKEN", "")
+    headers = {"Accept": "application/vnd.github+json"}
+    if gh_tok:
+        headers["Authorization"] = f"token {gh_tok}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"https://api.github.com/search/repositories?q={name}+language:Go&sort=stars&order=desc&per_page=3"
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=6)) as r:
+                if r.status != 200:
+                    return name
+                data = await r.json()
+                items = data.get("items", [])
+                for item in items:
+                    repo_name = item.get("name", "")
+                    full = item.get("full_name", "")
+                    if repo_name.lower() == name.lower() and full:
+                        return f"github.com/{full}"
+                if items:
+                    return f"github.com/{items[0].get('full_name', '')}"
+    except Exception:
+        pass
+    return name
+
+
 async def fetch_go(name: str) -> dict | None:
     """Fetch Go module info from proxy.golang.org."""
+    # Resolve short names (e.g. "gin") -> github.com/gin-gonic/gin via GitHub search
+    name = await _resolve_go_shortname(name)
     # Go module names use / (e.g. github.com/gin-gonic/gin)
     encoded = name.replace("/", "/")  # proxy handles slashes
     url = f"{REGISTRIES['go']}/{name}/@latest"
@@ -384,15 +456,17 @@ async def fetch_maven(name: str) -> dict | None:
         from datetime import datetime, timezone
         last_published = datetime.fromtimestamp(timestamp / 1000, tz=timezone.utc).isoformat()
 
+    pom_meta = await _fetch_maven_pom(group_id, artifact_id, latest)
+
     return {
         "ecosystem": "maven",
         "name": name,
         "latest_version": latest,
-        "description": "",
-        "license": "",
-        "homepage": f"https://search.maven.org/artifact/{group_id}/{artifact_id}",
-        "repository": "",
-        "downloads_weekly": 0,
+        "description": pom_meta["description"],
+        "license": pom_meta["license"],
+        "homepage": pom_meta["homepage"] or f"https://search.maven.org/artifact/{group_id}/{artifact_id}",
+        "repository": pom_meta["repository"],
+        "downloads_weekly": None,  # Maven Central does not expose download counts.
         "maintainers_count": 0,
         "deprecated": False,
         "deprecated_message": None,
@@ -402,6 +476,109 @@ async def fetch_maven(name: str) -> dict | None:
         "all_version_count": doc.get("versionCount", len(versions_list)),
         "dependencies": [],
     }
+
+
+
+_MAVEN_LICENSE_MAP = {
+    "apache license, version 2.0": "Apache-2.0",
+    "apache 2.0": "Apache-2.0",
+    "apache-2.0": "Apache-2.0",
+    "apache license 2.0": "Apache-2.0",
+    "the apache software license, version 2.0": "Apache-2.0",
+    "mit license": "MIT",
+    "mit": "MIT",
+    "bsd license": "BSD-3-Clause",
+    "bsd-3-clause": "BSD-3-Clause",
+    "bsd 3-clause license": "BSD-3-Clause",
+    "gnu general public license, version 2": "GPL-2.0",
+    "gnu lesser general public license, version 2.1": "LGPL-2.1",
+    "eclipse public license - v 2.0": "EPL-2.0",
+    "eclipse public license 2.0": "EPL-2.0",
+    "eclipse public license - v 1.0": "EPL-1.0",
+}
+
+
+async def _fetch_maven_pom(group_id: str, artifact_id: str, version: str, depth: int = 0) -> dict:
+    """Fetch and parse Maven POM to extract description, license, scm, url. Recurses into parent POM (max depth 3) to resolve inherited licenses."""
+    out = {"description": "", "license": "", "homepage": "", "repository": ""}
+    if not version or depth > 3:
+        return out
+    group_path = group_id.replace(".", "/")
+    pom_url = f"https://repo1.maven.org/maven2/{group_path}/{artifact_id}/{version}/{artifact_id}-{version}.pom"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(pom_url, timeout=aiohttp.ClientTimeout(total=8)) as resp:
+                if resp.status != 200:
+                    return out
+                xml_text = await resp.text()
+    except Exception:
+        return out
+
+    try:
+        from lxml import etree
+        root = etree.fromstring(xml_text.encode("utf-8"))
+        ns = {"m": "http://maven.apache.org/POM/4.0.0"}
+
+        def _find(path: str) -> str:
+            for p in [path, path.replace("m:", "")]:
+                el = root.find(p, namespaces=ns)
+                if el is not None and el.text:
+                    return el.text.strip()
+            return ""
+
+        desc = _find("m:description")
+        if desc:
+            out["description"] = " ".join(desc.split())[:500]
+
+        url = _find("m:url")
+        if url:
+            out["homepage"] = url
+
+        scm = _find("m:scm/m:url") or _find("m:scm/m:connection")
+        if scm:
+            if scm.startswith("scm:git:"):
+                scm = scm[8:]
+            out["repository"] = scm
+
+        lic_names = []
+        for lic_el in root.findall("m:licenses/m:license", namespaces=ns) or root.findall("licenses/license"):
+            for child in lic_el:
+                tag = etree.QName(child).localname
+                if tag == "name" and child.text:
+                    raw = child.text.strip()
+                    key = raw.lower()
+                    lic_names.append(_MAVEN_LICENSE_MAP.get(key, raw))
+                    break
+        if lic_names:
+            out["license"] = " OR ".join(lic_names)
+
+        # Parent POM inheritance — resolve missing fields (license especially)
+        if not out["license"] or not out["description"]:
+            parent_el = root.find("m:parent", namespaces=ns) or root.find("parent")
+            if parent_el is not None:
+                p_group = p_artifact = p_version = ""
+                for child in parent_el:
+                    tag = etree.QName(child).localname
+                    if tag == "groupId" and child.text:
+                        p_group = child.text.strip()
+                    elif tag == "artifactId" and child.text:
+                        p_artifact = child.text.strip()
+                    elif tag == "version" and child.text:
+                        p_version = child.text.strip()
+                if p_group and p_artifact and p_version:
+                    parent_meta = await _fetch_maven_pom(p_group, p_artifact, p_version, depth + 1)
+                    if not out["license"]:
+                        out["license"] = parent_meta["license"]
+                    if not out["description"]:
+                        out["description"] = parent_meta["description"]
+                    if not out["homepage"]:
+                        out["homepage"] = parent_meta["homepage"]
+                    if not out["repository"]:
+                        out["repository"] = parent_meta["repository"]
+    except Exception:
+        pass
+
+    return out
 
 
 async def fetch_nuget(name: str) -> dict | None:
@@ -776,12 +953,12 @@ async def fetch_swift(name: str) -> dict | None:
     return {
         "ecosystem": "swift",
         "name": name,
-        "latest_version": latest_version,
+        "latest_version": latest_version or None,
         "description": repo.get("description", ""),
         "license": repo.get("license", {}).get("spdx_id", "") if isinstance(repo.get("license"), dict) else "",
         "homepage": repo.get("homepage", "") or repo_url,
         "repository": repo_url,
-        "downloads_weekly": 0,
+        "downloads_weekly": None,  # Swift/SPM has no central download metric.
         "maintainers_count": 1,
         "deprecated": repo.get("archived", False),
         "deprecated_message": "Archived" if repo.get("archived") else None,

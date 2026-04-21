@@ -12,6 +12,27 @@ interface Snippet {
 
 const SNIPPETS: Snippet[] = [
   {
+    id: "mcp",
+    title: "MCP server (Claude Code / Desktop / Cursor)",
+    blurb: "Install via npm. 23 tools for package intelligence (incl. ai_brief, audit_stack, get_migration_path), zero config.",
+    lang: "sh",
+    code: `# Claude Code (one-liner — local stdio)
+claude mcp add depscope -- npx -y depscope-mcp
+
+# Remote MCP (no install, recommended)
+# Add to ~/.claude/mcp_servers.json or Cursor mcp.json:
+{
+  "mcpServers": {
+    "depscope": { "url": "https://mcp.depscope.dev/mcp" }
+  }
+}
+
+# 23 tools available. Most-used for AI agents:
+#   ai_brief         — 300-token package verdict
+#   audit_stack      — one-call audit for N packages
+#   get_migration_path — code diff to migrate deprecated → modern`,
+  },
+  {
     id: "claude",
     title: "Claude Code",
     blurb: "Add one line to CLAUDE.md or MEMORY.md.",
@@ -56,17 +77,96 @@ curl -X POST https://depscope.dev/api/scan \\
     code: `https://depscope.dev/openapi-gpt.json`,
   },
   {
+    id: "cli",
+    title: "CLI — one-line audit before install",
+    blurb: "Published on npm as depscope-cli. Works on any machine with Node 18+.",
+    lang: "sh",
+    code: `# Audit before install (CI-friendly, exit 1 on critical)
+npx -y depscope-cli audit express request lodash
+
+# From a manifest
+npx -y depscope-cli audit --file package.json
+npx -y depscope-cli audit --file requirements.txt
+
+# Drop-in code diff for deprecated → modern
+npx -y depscope-cli migration npm request axios
+
+# One-package AI brief (~300 tokens, paste into system prompt)
+npx -y depscope-cli brief npm/express`,
+  },
+  {
+    id: "migration",
+    title: "Migration paths (deprecated → modern with code diff)",
+    blurb: "Curated migrations with literal before/after snippets ready to apply. Call via MCP get_migration_path or REST.",
+    lang: "sh",
+    code: `# MCP tool call (23rd tool)
+{"name":"get_migration_path","arguments":{"ecosystem":"npm","from_package":"request","to_package":"axios"}}
+
+# REST
+curl https://depscope.dev/api/migration/npm/request/axios
+curl https://depscope.dev/api/migration/pypi/urllib2/requests
+curl https://depscope.dev/api/migration/npm/moment/dayjs
+
+# Returns: rationale, effort_minutes, diff_examples[], breaking_changes[]`,
+  },
+  {
+    id: "vscode",
+    title: "VS Code (Copilot, Cline, Continue.dev)",
+    blurb: "VS Code itself has no MCP — works through any AI extension that supports MCP. Drop the same URL.",
+    file: ".vscode/mcp.json",
+    lang: "json",
+    code: `// 1) VS Code + GitHub Copilot (MCP preview)
+//    Settings: "chat.mcp.enabled": true
+//    Then create .vscode/mcp.json (workspace) or user-global:
+{
+  "servers": {
+    "depscope": { "type": "http", "url": "https://mcp.depscope.dev/mcp" }
+  }
+}
+
+// 2) VS Code + Cline — Settings UI → MCP Servers → Add
+//    URL: https://mcp.depscope.dev/mcp
+
+// 3) VS Code + Continue.dev (~/.continue/config.json)
+{
+  "mcpServers": [
+    { "name": "depscope",
+      "transport": { "type": "sse", "url": "https://mcp.depscope.dev/mcp" } }
+  ]
+}
+
+// 4) Fallback (no MCP extension): .vscode/tasks.json
+//    Run "DepScope: audit" from the Tasks menu
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "DepScope: audit",
+      "type": "shell",
+      "command": "npx -y depscope-cli audit --file package.json",
+      "problemMatcher": []
+    }
+  ]
+}`,
+  },
+  {
     id: "gha",
     title: "GitHub Actions",
-    blurb: "Add to your CI pipeline.",
+    blurb: "Fail PRs on deprecated, malicious, or actively-exploited packages.",
     file: ".github/workflows/depscope.yml",
     lang: "yaml",
-    code: `- name: DepScope Audit
-  run: |
-    curl -s -X POST https://depscope.dev/api/scan \\
-      -H "Content-Type: application/json" \\
-      -d "{\\"ecosystem\\":\\"npm\\",\\"packages\\":$(cat package.json | jq '.dependencies')}" \\
-      | jq '.project_risk'`,
+    code: `name: Dependency audit
+on: [pull_request, push]
+
+jobs:
+  depscope:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cuttalo/depscope-audit-action@v1
+        with:
+          manifest: package.json
+          fail-on: critical   # critical | risk | none`,
   },
   {
     id: "python",

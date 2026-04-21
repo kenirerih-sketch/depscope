@@ -3,15 +3,19 @@ import sys
 import asyncio
 import smtplib
 from email.mime.text import MIMEText
+from email.utils import make_msgid, formatdate
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone
+
+SMTP_USER = "depscope@cuttalo.com"
+SMTP_PASS = "REDACTED_SMTP"
 
 sys.path.insert(0, "/home/deploy/depscope")
 
 RECIPIENTS = ["vincenzo@cuttalo.com", "arch.vincenzo.rubino@gmail.com"]
 FROM_EMAIL = "depscope@cuttalo.com"
-SMTP_HOST = "10.10.0.130"
-SMTP_PORT = 25
+SMTP_HOST = "mail.cuttalo.com"
+SMTP_PORT = 587
 
 
 async def gather_stats():
@@ -247,11 +251,17 @@ def build_html(s):
 def send_report(html):
     msg = MIMEMultipart("alternative")
     msg["Subject"] = f"DepScope Report — {datetime.now(timezone.utc).strftime('%d %b %Y')}"
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain="cuttalo.com")
     msg["From"] = FROM_EMAIL
     msg["To"] = ", ".join(RECIPIENTS)
     msg.attach(MIMEText(html, "html"))
 
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+        server.login(SMTP_USER, SMTP_PASS)
         server.sendmail(FROM_EMAIL, RECIPIENTS, msg.as_string())
     print("Report sent!")
 

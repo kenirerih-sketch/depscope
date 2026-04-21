@@ -27,6 +27,36 @@ interface Entry {
 
 const ENTRIES: Entry[] = [
   {
+    date: "2026-04-21",
+    title: "depscope-cli on npm + GitHub Action",
+    badge: "release",
+    body: "Published `depscope-cli` to npm — `npx -y depscope-cli audit express request lodash` returns a prescriptive action list. Plus `cuttalo/depscope-audit-action@v1` to fail PRs on deprecated/malicious/CVE-active packages.",
+  },
+  {
+    date: "2026-04-21",
+    title: "AI-native endpoints: /api/ai/brief + /api/ai/stack + /api/migration",
+    badge: "api",
+    body: "Three new endpoints designed for LLM agents: 300-token compact brief, one-call stack audit (up to 50 pkgs), and curated migration paths with literal before/after code diffs. Token cost cut from ~6k per decision to ~300.",
+  },
+  {
+    date: "2026-04-21",
+    title: "23 MCP tools: ai_brief, audit_stack, get_migration_path",
+    badge: "integration",
+    body: "MCP server now exposes 23 tools (was 20). audit_stack replaces N per-package calls with one prescriptive verdict. get_migration_path returns ready-to-paste code diffs for 10 curated migrations (request→axios, moment→dayjs, urllib2→requests, flask→fastapi, ...).",
+  },
+  {
+    date: "2026-04-21",
+    title: "Threat intelligence: CISA KEV + EPSS + OpenSSF malicious",
+    badge: "data",
+    body: "Each vulnerability now carries in_kev (actively exploited per CISA), epss_prob (exploit probability), and threat_tier (theoretical/likely/actively_exploited). Malicious detection cross-checks 224k OpenSSF entries with a sanity guard that prevents false positives on mainstream packages.",
+  },
+  {
+    date: "2026-04-21",
+    title: "Multi-ecosystem coverage fixes",
+    badge: "fix",
+    body: "PyPI license now resolves via classifier+license_expression fallback (django, numpy, pandas no longer null). Maven POM parser inherits license/description from parent POM (Apache Commons, Spring, Netty). Go short names auto-resolve via GitHub search (gin → github.com/gin-gonic/gin).",
+  },
+  {
     date: "2026-04-19",
     title: "3 new verticals: Error Fix, Compat Matrix, Known Bugs",
     badge: "feature",

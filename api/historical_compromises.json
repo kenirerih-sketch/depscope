@@ -1,0 +1,112 @@
+{
+  "_meta": {
+    "schema_version": 1,
+    "description": "Historical supply-chain incidents. Each entry documents a package that was compromised, sabotaged, or hijacked in the past even when the currently-latest version is clean. Keys are 'ecosystem/package' lowercased.",
+    "last_updated": "2026-04-21",
+    "upstream_source_of_truth": "OSV + GHSA + incident write-ups; expand via scripts/seed_historical_compromises.py"
+  },
+  "npm/colors": {
+    "incident_date": "2022-01-08",
+    "incident_type": "maintainer_sabotage",
+    "versions_affected": ["1.4.1", "1.4.2"],
+    "last_known_safe": "1.4.0",
+    "summary": "Maintainer Marak Squires published an intentional infinite loop (liberty flag protest) breaking thousands of dependent projects.",
+    "references": ["https://github.com/Marak/colors.js/issues/285", "https://snyk.io/blog/open-source-npm-packages-colors-faker/"]
+  },
+  "npm/faker": {
+    "incident_date": "2022-01-04",
+    "incident_type": "maintainer_sabotage",
+    "versions_affected": ["6.6.6"],
+    "last_known_safe": "5.5.3",
+    "summary": "Same author as colors; published an empty version 6.6.6 as protest. Community forked to @faker-js/faker.",
+    "references": ["https://github.com/faker-js/faker/issues/476"]
+  },
+  "npm/event-stream": {
+    "incident_date": "2018-11-26",
+    "incident_type": "dependency_injection",
+    "versions_affected": ["3.3.6"],
+    "last_known_safe": "3.3.5",
+    "summary": "Malicious flatmap-stream dependency injected via handover to a new maintainer; targeted Copay bitcoin wallets.",
+    "references": ["https://github.com/dominictarr/event-stream/issues/116", "https://blog.npmjs.org/post/180565383195/details-about-the-event-stream-incident.html"]
+  },
+  "npm/flatmap-stream": {
+    "incident_date": "2018-11-26",
+    "incident_type": "malicious_package",
+    "versions_affected": ["0.1.1", "0.1.2"],
+    "last_known_safe": null,
+    "summary": "Malicious package created specifically as payload carrier for the event-stream incident. Do not install any version.",
+    "references": ["https://github.com/advisories/GHSA-pvmf-5839-q8wg"]
+  },
+  "npm/ua-parser-js": {
+    "incident_date": "2021-10-22",
+    "incident_type": "account_hijack",
+    "versions_affected": ["0.7.29", "0.8.0", "1.0.0"],
+    "last_known_safe": "0.7.28",
+    "summary": "Maintainer npm account hijacked; malicious releases shipped a cryptominer + password stealer. Fixed in 0.7.30/0.8.1/1.0.1.",
+    "references": ["https://github.com/faisalman/ua-parser-js/issues/536", "https://www.cisa.gov/news-events/alerts/2021/10/22/malware-discovered-popular-npm-package-ua-parser-js"]
+  },
+  "npm/node-ipc": {
+    "incident_date": "2022-03-08",
+    "incident_type": "maintainer_sabotage",
+    "versions_affected": ["10.1.1", "10.1.2", "10.1.3"],
+    "last_known_safe": "9.2.1",
+    "summary": "'Peacenotwar' geo-targeted wipe against RU/BY IPs shipped by the maintainer as protest.",
+    "references": ["https://github.com/RIAEvangelist/node-ipc/issues/233", "https://snyk.io/blog/peacenotwar-malicious-npm-node-ipc-package/"]
+  },
+  "npm/coa": {
+    "incident_date": "2021-11-04",
+    "incident_type": "account_hijack",
+    "versions_affected": ["2.0.3", "2.0.4", "2.1.1", "2.1.3", "3.0.1", "3.1.3"],
+    "last_known_safe": "2.0.2",
+    "summary": "Account hijack; password stealer payload similar to ua-parser-js. Affected downstream: react-scripts.",
+    "references": ["https://github.com/veged/coa/issues/99"]
+  },
+  "npm/rc": {
+    "incident_date": "2021-11-04",
+    "incident_type": "account_hijack",
+    "versions_affected": ["1.2.9", "1.3.9", "2.3.9"],
+    "last_known_safe": "1.2.8",
+    "summary": "Coordinated with coa hijack; same attacker group injected the same stealer.",
+    "references": ["https://github.com/dominictarr/rc/issues/132"]
+  },
+  "pypi/ctx": {
+    "incident_date": "2022-05-14",
+    "incident_type": "maintainer_domain_takeover",
+    "versions_affected": ["0.1.2", "0.2.0", "0.2.2"],
+    "last_known_safe": "0.1.1",
+    "summary": "Maintainer's expired email domain was re-registered and used to reset PyPI credentials; malicious releases exfiltrated env vars. Already flagged by OSV (GHSA-67r3-h899-9w95).",
+    "references": ["https://github.com/advisories/GHSA-67r3-h899-9w95"]
+  },
+  "pypi/phpass": {
+    "incident_date": "2022-05-14",
+    "incident_type": "maintainer_domain_takeover",
+    "versions_affected": ["3.0"],
+    "last_known_safe": null,
+    "summary": "Same domain-takeover methodology as ctx, same attacker; env-var exfiltration.",
+    "references": ["https://github.com/advisories/GHSA-jpgv-38pj-72qh"]
+  },
+  "rubygems/rest-client": {
+    "incident_date": "2019-08-19",
+    "incident_type": "account_hijack",
+    "versions_affected": ["1.6.10", "1.6.11", "1.6.12", "1.6.13"],
+    "last_known_safe": "2.1.0",
+    "summary": "Old version line hijacked; cryptominer + remote-code-exec backdoor. Yanked.",
+    "references": ["https://github.com/rest-client/rest-client/issues/713"]
+  },
+  "pypi/jellyfish": {
+    "incident_date": "2022-08-22",
+    "incident_type": "malicious_release",
+    "versions_affected": ["0.7.2"],
+    "last_known_safe": "0.7.1",
+    "summary": "SSH key & GPG key exfiltration via post-install hook.",
+    "references": ["https://blog.phylum.io/phylum-discovers-dozens-more-pypi-packages-attempting-to-deliver-w4sp-stealer-in-ongoing-supply-chain-attack/"]
+  },
+  "pypi/django-rest-framework-simplejwt": {
+    "incident_date": "2023-08-02",
+    "incident_type": "cve_history",
+    "versions_affected": ["<5.3.1"],
+    "last_known_safe": "5.3.1",
+    "summary": "CVE-2024-22513: information disclosure via improperly-rejected tokens. Historical note — no active compromise.",
+    "references": ["https://nvd.nist.gov/vuln/detail/CVE-2024-22513"]
+  }
+}

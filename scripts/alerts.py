@@ -5,15 +5,19 @@ import os
 import smtplib
 import traceback
 from email.mime.text import MIMEText
+from email.utils import make_msgid, formatdate
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone, timedelta
+
+SMTP_USER = "depscope@cuttalo.com"
+SMTP_PASS = "REDACTED_SMTP"
 
 sys.path.insert(0, "/home/deploy/depscope")
 
 ADMIN_EMAIL = ["vincenzo@cuttalo.com", "arch.vincenzo.rubino@gmail.com"]
 FROM_EMAIL = "depscope@cuttalo.com"
-SMTP_HOST = "10.10.0.130"
-SMTP_PORT = 25
+SMTP_HOST = "mail.cuttalo.com"
+SMTP_PORT = 587
 
 THRESHOLDS = {
     "error_rate_pct": 10,        # >10% errori nelle ultime 6h
@@ -32,6 +36,8 @@ def send_alert(subject: str, body: str):
     try:
         msg = MIMEMultipart("alternative")
         msg["Subject"] = f"[DepScope Alert] {subject}"
+        msg["Date"] = formatdate(localtime=True)
+        msg["Message-ID"] = make_msgid(domain="cuttalo.com")
         msg["From"] = FROM_EMAIL
         msg["To"] = ", ".join(ADMIN_EMAIL) if isinstance(ADMIN_EMAIL, list) else ADMIN_EMAIL
 
@@ -51,6 +57,10 @@ def send_alert(subject: str, body: str):
         msg.attach(MIMEText(html, "html"))
 
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(SMTP_USER, SMTP_PASS)
             server.sendmail(FROM_EMAIL, ADMIN_EMAIL if isinstance(ADMIN_EMAIL, list) else [ADMIN_EMAIL], msg.as_string())
         print(f"  ALERT SENT: {subject}")
         return True

@@ -1,0 +1,24 @@
+Ho lanciato depscope.dev.
+
+Milioni di AI coding agent — Claude, Cursor, ChatGPT, Copilot — raccomandano ogni giorno pacchetti npm / PyPI / Cargo a milioni di sviluppatori. Tre cose sono rotte nello stesso momento.
+
+Token bruciati a scala. Ogni agente fa fetch del JSON grezzo della registry — chiavi che il modello non usa — per una singola decisione di install. Ripetuto miliardi di volte al giorno diventa costo LLM reale, energia reale.
+
+Training stantio. Chiuso 6-12 mesi prima della risposta: CVE recenti mancate, librerie deprecate ancora consigliate, a volte nomi di pacchetti che non sono mai esistiti.
+
+Nessun layer condiviso. Ogni agente interroga le registry autonomamente, reinventando ogni volta il lookup.
+
+DepScope è il layer condiviso:
+→ OSV.dev + GitHub Advisory Database esposti come API live
+→ Un endpoint dedicato restituisce payload 74% più piccoli del JSON grezzo per la stessa decisione di install
+→ MCP server per integrazione diretta con Claude Desktop / Cursor
+→ Copre 17 ecosistemi (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems + 10 altri)
+
+Infrastruttura aperta, MIT, hosted in Europa.
+
+La package intelligence è infrastruttura, non un prodotto premium. Dovrebbe esistere una volta per tutti, non essere reinventata da ogni singolo agente.
+
+🔗 https://depscope.dev
+💾 https://github.com/cuttalo/depscope
+
+#SupplyChainSecurity #AI #DevTools #OpenSource #MadeInItaly
