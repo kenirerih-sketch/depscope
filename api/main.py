@@ -3586,6 +3586,131 @@ async def check_exists(ecosystem: str, package: str):
     return result
 
 
+
+# ============================================================================
+# /api/contact — professional inbound channel.
+# Used by: web form (/contact), CLI, MCP tool (contact_depscope), partner ESPs.
+# Rate-limited at the nginx level. Server-side: honeypot + length checks +
+# email notification + DB persistence.
+# ============================================================================
+
+_CONTACT_TYPES = {"bug", "feature", "listing", "partnership", "press", "security", "other"}
+
+
+class _ContactRequest(BaseModel):
+    name: str = ""
+    email: str
+    type: str = "other"
+    subject: str
+    body: str
+    company: str = ""
+    source: str = "web"        # web | cli | mcp | agent | api
+    consent: bool = True
+    honeypot: str = ""         # bots fill this; humans don't see it
+
+
+@app.post("/api/contact", tags=["public"])
+async def submit_contact(payload: _ContactRequest, request: Request = None):
+    """Submit a contact request (form, CLI, MCP, agent). Free, no auth."""
+    # Honeypot: silent success so bots don't retry
+    if payload.honeypot.strip():
+        return {"ok": True, "message": "Thanks, we'll get back to you."}
+    email = payload.email.strip().lower()
+    if "@" not in email or "." not in email.split("@")[-1] or len(email) > 200:
+        raise HTTPException(400, "Invalid email")
+    subject = payload.subject.strip()
+    body = payload.body.strip()
+    if not subject or len(subject) < 3 or len(subject) > 200:
+        raise HTTPException(400, "Subject must be 3-200 characters")
+    if not body or len(body) < 10 or len(body) > 8000:
+        raise HTTPException(400, "Message must be 10-8000 characters")
+    typ = payload.type.lower().strip()
+    if typ not in _CONTACT_TYPES:
+        typ = "other"
+    src = (payload.source or "web").lower().strip()[:20]
+    name = payload.name.strip()[:120]
+    company = payload.company.strip()[:120]
+    ua = ""
+    ip = ""
+    if request is not None:
+        ua = request.headers.get("user-agent", "")[:300]
+        ip = (request.headers.get("x-forwarded-for") or request.client.host if request.client else "") or ""
+        ip = ip.split(",")[0].strip()[:60]
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        msg_id = await conn.fetchval(
+            """
+            INSERT INTO contact_messages
+                (name, email, type, subject, body, company, source, user_agent, ip_addr, status, created_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'new',NOW())
+            RETURNING id
+            """,
+            name, email, typ, subject, body, company, src, ua, ip,
+        )
+
+    # Best-effort: email notification + ack
+    try:
+        import smtplib, ssl, os
+        from email.message import EmailMessage
+        SMTP_HOST = os.environ.get("SMTP_HOST", "mail.cuttalo.com")
+        SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+        SMTP_USER = os.environ.get("SMTP_USER", "depscope@cuttalo.com")
+        SMTP_PASS = os.environ.get("SMTP_PASS", "")
+        # Skip SMTP if neutralized (e.g. on stage where SMTP_HOST is 127.0.0.1:9999)
+        if SMTP_HOST not in ("127.0.0.1", "localhost") and SMTP_PASS:
+            ctx = ssl.create_default_context()
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
+                smtp.ehlo(); smtp.starttls(context=ctx); smtp.ehlo()
+                smtp.login(SMTP_USER, SMTP_PASS)
+                # 1) notify internal
+                notif = EmailMessage()
+                notif["From"] = f"DepScope <{SMTP_USER}>"
+                notif["To"] = SMTP_USER
+                notif["Reply-To"] = email
+                notif["Subject"] = f"[contact:{typ}] {subject[:120]}"
+                notif.set_content(
+                    f"From: {name or '(no name)'} <{email}>\n"
+                    f"Company: {company or '(none)'}\n"
+                    f"Type: {typ}\n"
+                    f"Source: {src}\n"
+                    f"IP: {ip}  UA: {ua[:100]}\n"
+                    f"--- Message ---\n{body}\n"
+                    f"--- DB id: {msg_id} ---\n"
+                )
+                smtp.send_message(notif)
+                # 2) auto-ack to sender
+                ack = EmailMessage()
+                ack["From"] = f"DepScope <{SMTP_USER}>"
+                ack["To"] = email
+                ack["Subject"] = f"Re: {subject[:160]}"
+                ack.set_content(
+                    f"Hi{(' ' + name) if name else ''},\n\n"
+                    "Thanks for reaching out to DepScope. We received your message and "
+                    "will get back to you shortly.\n\n"
+                    "Reference: #" + str(msg_id) + "\n\n"
+                    "If urgent, reply to this email.\n\n"
+                    "DepScope team\n"
+                    "https://depscope.dev\n"
+                )
+                smtp.send_message(ack)
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "id": msg_id,
+        "message": "Thanks, we'll get back to you shortly.",
+        "ack_email_sent": True,
+    }
+
+
+@app.get("/api/contact/types", tags=["public"])
+async def contact_types():
+    """List allowed values for the type field of /api/contact."""
+    return {"types": sorted(_CONTACT_TYPES)}
+
+
 @app.get("/api/now", tags=["public"])
 async def get_current_time():
     """
