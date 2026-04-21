@@ -1435,9 +1435,28 @@ async def get_scorecard(ecosystem: str, package: str):
             "SELECT repo_owner, repo_name FROM maintainer_signals WHERE ecosystem=$1 AND package_name=$2",
             ecosystem, package,
         )
-        if not ms or not ms["repo_owner"]:
+        repo_owner = None
+        repo_name = None
+        if ms and ms["repo_owner"]:
+            repo_owner = ms["repo_owner"]
+            repo_name = ms["repo_name"]
+        else:
+            # Fallback: parse packages.repository for GitHub URL. Covers the
+            # common case where maintainer_signals hasn't been populated yet
+            # for a given package (popular npm packages often fall through).
+            pkg_repo = await conn.fetchval(
+                "SELECT repository FROM packages WHERE ecosystem=$1 AND LOWER(name)=LOWER($2)",
+                ecosystem, package,
+            )
+            if pkg_repo:
+                import re as _re
+                m = _re.search(r"github\.com[/:]([\w.-]+)/([\w.-]+?)(?:\.git)?/?$", pkg_repo)
+                if m:
+                    repo_owner = m.group(1)
+                    repo_name = m.group(2)
+        if not repo_owner:
             return {"package": package, "ecosystem": ecosystem, "available": False, "reason": "no repo linked"}
-        repo_url = f"github.com/{ms['repo_owner']}/{ms['repo_name']}"
+        repo_url = f"github.com/{repo_owner}/{repo_name}"
         row = await conn.fetchrow(
             "SELECT score, checks_json, scorecard_date FROM scorecard_scores WHERE repo_url=$1",
             repo_url,
@@ -3609,12 +3628,92 @@ class _ContactRequest(BaseModel):
     honeypot: str = ""         # bots fill this; humans don't see it
 
 
+
+# Disposable / throwaway email domains (curated short list — extend as needed)
+_DISPOSABLE_EMAIL_DOMAINS = {
+    "mailinator.com","10minutemail.com","tempmail.com","guerrillamail.com",
+    "trashmail.com","yopmail.com","sharklasers.com","getnada.com","fakeinbox.com",
+    "throwawaymail.com","emailondeck.com","spamgourmet.com","tempr.email",
+    "maildrop.cc","mintemail.com","grr.la","mvrht.com","incognitomail.com",
+}
+
+_SPAM_KEYWORDS = (
+    "viagra","cialis","crypto pump","mlm","forex bot","make $ ","seo backlinks",
+    "buy followers","instant ranking","casino","free crypto","airdrop now",
+)
+
+
+async def _contact_security_check(payload, request) -> tuple[bool, str]:
+    """Returns (ok, error_message). Stops abuse before DB insert + email send."""
+    email = (payload.email or "").strip().lower()
+    ip = ""
+    if request is not None and request.client:
+        ip = (request.headers.get("x-forwarded-for") or request.client.host or "").split(",")[0].strip()
+
+    # 1) Disposable email blocklist
+    domain = email.rsplit("@", 1)[-1]
+    if domain in _DISPOSABLE_EMAIL_DOMAINS:
+        return False, "Please use a non-disposable email address."
+
+    # 2) Body too many links (>3) → spammy
+    body_lc = (payload.body or "").lower()
+    link_count = body_lc.count("http://") + body_lc.count("https://")
+    if link_count > 3:
+        return False, "Too many links in the message body."
+
+    # 3) Spam keywords
+    for kw in _SPAM_KEYWORDS:
+        if kw in body_lc or kw in (payload.subject or "").lower():
+            return False, "Message rejected by spam filter. Email us directly if this is a false positive."
+
+    # 4) Rate limit via Redis: per-IP and per-email
+    try:
+        from api.cache import get_redis
+        r = await get_redis()
+        if r is not None:
+            # per-IP: 3 / 15 min, 10 / day
+            if ip:
+                k_ip_short = f"contact_rl:ip:short:{ip}"
+                k_ip_day = f"contact_rl:ip:day:{ip}"
+                n_short = await r.incr(k_ip_short)
+                if n_short == 1:
+                    await r.expire(k_ip_short, 900)
+                if n_short > 3:
+                    return False, "Too many requests from your IP. Try again in 15 minutes."
+                n_day = await r.incr(k_ip_day)
+                if n_day == 1:
+                    await r.expire(k_ip_day, 86400)
+                if n_day > 10:
+                    return False, "Daily contact limit reached for your IP. Email us directly."
+            # per-email: 2 / hour, 5 / day
+            k_em_h = f"contact_rl:em:h:{email}"
+            k_em_d = f"contact_rl:em:d:{email}"
+            n_em_h = await r.incr(k_em_h)
+            if n_em_h == 1:
+                await r.expire(k_em_h, 3600)
+            if n_em_h > 2:
+                return False, "You\'ve already submitted 2 messages this hour. We\'ll get back soon."
+            n_em_d = await r.incr(k_em_d)
+            if n_em_d == 1:
+                await r.expire(k_em_d, 86400)
+            if n_em_d > 5:
+                return False, "Daily limit reached for this email."
+    except Exception:
+        # If Redis is down, fail open (still let request through). Length checks remain.
+        pass
+
+    return True, ""
+
+
 @app.post("/api/contact", tags=["public"])
 async def submit_contact(payload: _ContactRequest, request: Request = None):
     """Submit a contact request (form, CLI, MCP, agent). Free, no auth."""
     # Honeypot: silent success so bots don't retry
     if payload.honeypot.strip():
         return {"ok": True, "message": "Thanks, we'll get back to you."}
+    ok_sec, err_sec = await _contact_security_check(payload, request)
+    if not ok_sec:
+        raise HTTPException(429 if "too many" in err_sec.lower() or "limit" in err_sec.lower() else 400, err_sec)
     email = payload.email.strip().lower()
     if "@" not in email or "." not in email.split("@")[-1] or len(email) > 200:
         raise HTTPException(400, "Invalid email")
