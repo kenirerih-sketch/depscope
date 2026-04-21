@@ -26,6 +26,8 @@ from api.database import get_pool, close_pool
 from api.cache import cache_get, cache_set, rate_limit_check
 from api.registries import fetch_package, fetch_vulnerabilities, save_package_to_db, fetch_github_stats, save_github_stats, get_github_stats_from_db
 from api.health import calculate_health_score
+from api.historical_compromises import lookup as lookup_historical
+from api.stdlib_modules import lookup as lookup_stdlib
 from api.auth import router as auth_router, _get_user_from_request
 from api.payments import router as payments_router
 from api.mcp_http import mcp_router
@@ -839,6 +841,23 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
     if ecosystem not in ("npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"):
         raise HTTPException(400, f"Unsupported ecosystem: {ecosystem}. Supported: npm, pypi, cargo, go, composer, maven, nuget, rubygems, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew")
 
+    stdlib_hint = lookup_stdlib(ecosystem, package)
+    if stdlib_hint:
+        return {
+            "package": package,
+            "ecosystem": ecosystem,
+            "exists": False,
+            "is_stdlib": True,
+            "hint": stdlib_hint,
+            "recommendation": {
+                "action": "no_install_needed",
+                "summary": f"{package} is a {stdlib_hint['kind']} — {stdlib_hint['replacement']}",
+            },
+            "_cache": "miss",
+            "_response_ms": int((time.time() - start) * 1000),
+            "_powered_by": "depscope.dev — stdlib hint",
+        }
+
     cache_key = f"check:{ecosystem}:{package}"
     cached = await cache_get(cache_key)
     if cached:
@@ -1374,8 +1393,12 @@ async def check_malicious(ecosystem: str, package: str):
               AND (data_json->>'withdrawn' IS NULL)
             LIMIT 1
         """, ecosystem, package)
+    hist = lookup_historical(ecosystem, package)
     if not row:
-        return {"package": package, "ecosystem": ecosystem, "is_malicious": False}
+        resp = {"package": package, "ecosystem": ecosystem, "is_malicious": False}
+        if hist:
+            resp["historical_compromise"] = hist
+        return resp
     # Sanity check: mainstream packages (>100k DL/week) in OpenSSF malicious feed
     # are almost always false positives (reserved-name squats, withdrawn advisories).
     dl_week = 0
@@ -1398,6 +1421,7 @@ async def check_malicious(ecosystem: str, package: str):
         "_sanity_guarded": is_mainstream,
         "downloads_weekly": dl_week,
         "note": (f"Advisory {row['vuln_id']} flags this name but the package has {dl_week:,} weekly downloads — likely false positive. Verify on OSV.dev.") if is_mainstream else None,
+        "historical_compromise": hist,
     }
 
 
@@ -3518,6 +3542,16 @@ async def check_exists(ecosystem: str, package: str):
     Does this package exist? Yes or no. Use before suggesting npm install X.
     """
     ecosystem = ecosystem.lower()
+    stdlib_hint = lookup_stdlib(ecosystem, package)
+    if stdlib_hint:
+        return {
+            "package": package,
+            "ecosystem": ecosystem,
+            "exists": False,
+            "is_stdlib": True,
+            "hint": stdlib_hint,
+            "latest": None,
+        }
     cache_key = f"exists:{ecosystem}:{package}"
     cached = await cache_get(cache_key)
     if cached:
