@@ -63,9 +63,14 @@ def calculate_health_score(pkg_data: dict, vulns: list = None, github: dict = No
         security = max(0, security)
     scores["security"] = security
 
-    # 4. Maturity (0-15): age + version count
+    # 4. Maturity (0-15): version history + age.
+    # Some registries (CPAN, Homebrew, part of Swift) expose only the latest
+    # version or omit first_published, so version_count alone underrates
+    # genuinely ancient & stable packages. Add: (a) age uplift from
+    # first_published when present, (b) a conservative recency floor when the
+    # registry exposes neither a history nor a first_published.
     maturity = 0
-    version_count = pkg_data.get("all_version_count", 0)
+    version_count = pkg_data.get("all_version_count", 0) or 0
     if version_count > 50:
         maturity = 15
     elif version_count > 20:
@@ -76,6 +81,50 @@ def calculate_health_score(pkg_data: dict, vulns: list = None, github: dict = No
         maturity = 6
     elif version_count > 1:
         maturity = 3
+
+    first_pub_raw = pkg_data.get("first_published")
+    first_pub_dt = None
+    if first_pub_raw:
+        if isinstance(first_pub_raw, str):
+            try:
+                first_pub_dt = datetime.fromisoformat(first_pub_raw.replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                first_pub_dt = None
+        elif isinstance(first_pub_raw, datetime):
+            first_pub_dt = first_pub_raw
+    if first_pub_dt:
+        if first_pub_dt.tzinfo is None:
+            first_pub_dt = first_pub_dt.replace(tzinfo=timezone.utc)
+        age_years = (datetime.now(timezone.utc) - first_pub_dt).days / 365.25
+        if age_years >= 10:
+            maturity = max(maturity, 15)
+        elif age_years >= 5:
+            maturity = max(maturity, 12)
+        elif age_years >= 3:
+            maturity = max(maturity, 9)
+        elif age_years >= 1:
+            maturity = max(maturity, 6)
+
+    if maturity == 0 and version_count <= 1 and not first_pub_dt:
+        last_pub_raw = pkg_data.get("last_published")
+        last_pub_dt = None
+        if last_pub_raw:
+            if isinstance(last_pub_raw, str):
+                try:
+                    last_pub_dt = datetime.fromisoformat(last_pub_raw.replace("Z", "+00:00"))
+                except (ValueError, TypeError):
+                    last_pub_dt = None
+            elif isinstance(last_pub_raw, datetime):
+                last_pub_dt = last_pub_raw
+        if last_pub_dt:
+            if last_pub_dt.tzinfo is None:
+                last_pub_dt = last_pub_dt.replace(tzinfo=timezone.utc)
+            days_since = (datetime.now(timezone.utc) - last_pub_dt).days
+            if days_since < 730:
+                maturity = 9
+            elif days_since < 1460:
+                maturity = 6
+
     scores["maturity"] = maturity
 
     # 5. Community (0-15): maintainers, contributors, issues, github stars
