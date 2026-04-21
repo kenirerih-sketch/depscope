@@ -11,11 +11,15 @@ import imaplib
 import email as email_lib
 import smtplib
 from email.mime.text import MIMEText
+from email.utils import make_msgid, formatdate
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timezone
 import hashlib
 
 from .common import (
+
+SMTP_USER = "depscope@cuttalo.com"
+SMTP_PASS = "REDACTED_SMTP"
     get_pool, log_action, update_platform_status,
     IMAP_HOST, IMAP_PORT, SMTP_HOST, SMTP_PORT,
     EMAIL_USER, EMAIL_PASS, EMAIL_FROM_NAME,
@@ -152,9 +156,15 @@ async def send_approved_emails(pool) -> dict:
             msg["From"] = f"{EMAIL_FROM_NAME} <{EMAIL_USER}>"
             msg["To"] = sender_email
             msg["Subject"] = subject
+            msg["Date"] = formatdate(localtime=True)
+            msg["Message-ID"] = make_msgid(domain="cuttalo.com")
             msg.attach(MIMEText(content, "plain"))
 
             with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+                server.ehlo()
+                server.starttls()
+                server.ehlo()
+                server.login(SMTP_USER, SMTP_PASS)
                 server.sendmail(EMAIL_USER, [sender_email], msg.as_string())
 
             async with pool.acquire() as conn:

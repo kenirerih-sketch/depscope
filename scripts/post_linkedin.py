@@ -50,7 +50,7 @@ async def main(content_path: str):
                 post_id = data.get("id") or r.headers.get("x-restli-id")
                 print(f"✓ posted: {post_id}")
                 await conn.execute(
-                    "INSERT INTO agent_actions (platform, action_type, target, result, created_at) VALUES ('linkedin','post',$1,$2,NOW()) ON CONFLICT DO NOTHING",
+                    "INSERT INTO agent_actions (platform, action_type, target_url, response, created_at) VALUES ('linkedin','post',$1,$2,NOW())",
                     content_path, f"OK:{post_id}",
                 )
             else:

@@ -23,6 +23,7 @@ import imaplib
 import email as email_lib
 import smtplib
 from email.mime.text import MIMEText
+from email.utils import make_msgid, formatdate
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, date, timezone
 from urllib.request import urlopen, Request as URLRequest
@@ -30,6 +31,9 @@ from urllib.error import URLError
 from urllib.parse import quote
 
 import asyncpg
+
+SMTP_USER = "depscope@cuttalo.com"
+SMTP_PASS = "REDACTED_SMTP"
 
 DB_URL = os.getenv("DATABASE_URL", "postgresql://depscope:${DB_PASSWORD}@localhost:5432/depscope")
 
@@ -44,10 +48,10 @@ REDDIT_KEYWORDS = ["package", "deprecated", "vulnerability", "npm", "pip", "depe
 HN_QUERIES = ["npm+security", "dependency+vulnerability", "package+deprecated", "supply+chain+attack"]
 
 # ── Email config ──
-IMAP_HOST = "10.10.0.130"
+IMAP_HOST = "mail.cuttalo.com"
 IMAP_PORT = 993
-SMTP_HOST = "10.10.0.130"
-SMTP_PORT = 25
+SMTP_HOST = "mail.cuttalo.com"
+SMTP_PORT = 587
 EMAIL_USER = "depscope@cuttalo.com"
 EMAIL_PASS = os.getenv("EMAIL_PASSWORD", "")
 EMAIL_FROM_NAME = "Vincenzo Rubino - DepScope"
@@ -540,9 +544,15 @@ async def send_email_reply(pool, opp: dict, content: str) -> bool:
         msg["From"] = f"{EMAIL_FROM_NAME} <{EMAIL_USER}>"
         msg["To"] = sender_email
         msg["Subject"] = subject
+        msg["Date"] = formatdate(localtime=True)
+        msg["Message-ID"] = make_msgid(domain="cuttalo.com")
         msg.attach(MIMEText(content, "plain"))
 
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.ehlo()
+            server.starttls()
+            server.ehlo()
+            server.login(SMTP_USER, SMTP_PASS)
             server.sendmail(EMAIL_USER, [sender_email], msg.as_string())
 
         async with pool.acquire() as conn:

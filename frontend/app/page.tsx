@@ -170,7 +170,7 @@ Reject if action="avoid". Alternatives: /api/alternatives/{ecosystem}/{package}.
     }
   }
 }
-// Zero install. 20 tools auto-registered.
+// Zero install. 23 tools auto-registered.
 // Fallback for clients without remote-MCP support:
 //   npm install -g depscope-mcp
 //   then use { command: "npx", args: ["depscope-mcp"] }`,
@@ -390,7 +390,7 @@ export default function Home() {
 
           {/* MCP tools banner */}
           <div className="mt-6 flex flex-wrap justify-center items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-faded)] font-mono">
-            <span className="tabular-nums"><span className="text-[var(--text-dim)]">{stats?.mcp_tools ?? 20}</span> MCP tools</span>
+            <span className="tabular-nums"><span className="text-[var(--text-dim)]">{stats?.mcp_tools ?? 23}</span> MCP tools</span>
             <span>·</span>
             <span className="tabular-nums"><span className="text-[var(--text-dim)]">{stats?.ecosystems?.length || 17}</span> ecosystems</span>
             <span>·</span>
@@ -674,7 +674,7 @@ export default function Home() {
                   </div>
                   <div className="p-5">
                     <Stat
-                      value={stats?.mcp_tools ?? 20}
+                      value={stats?.mcp_tools ?? 23}
                       label="MCP tools"
                       color="var(--accent)"
                     />
@@ -695,7 +695,7 @@ export default function Home() {
                   <span className="text-sm font-semibold text-[var(--text)]">Remote MCP — zero install</span>
                 </div>
                 <p className="text-sm text-[var(--text-dim)] mb-2">
-                  Claude Desktop / Cursor / Windsurf (recent versions) can connect with just a URL — no <code className="text-[var(--accent)] font-mono text-xs">npm install -g</code> needed. 20 tools auto-registered.
+                  Claude Desktop / Cursor / Windsurf (recent versions) can connect with just a URL — no <code className="text-[var(--accent)] font-mono text-xs">npm install -g</code> needed. 23 tools auto-registered.
                 </p>
                 <pre className="bg-[var(--bg-soft)] border border-[var(--border)] rounded p-3 text-xs font-mono overflow-x-auto">{`{ "mcpServers": { "depscope": { "url": "https://mcp.depscope.dev/mcp" } } }`}</pre>
               </div>
@@ -834,9 +834,34 @@ export default function Home() {
                       <Td>OSV + registry advisories, severity + fix</Td>
                     </Tr>
                     <Tr>
+                      <Td className="text-[var(--text-dim)]">Threat severity (KEV/EPSS)</Td>
+                      <Td>CVE list, no priority</Td>
+                      <Td>CISA Known-Exploited + EPSS score per CVE — know what to patch first</Td>
+                    </Tr>
+                    <Tr>
+                      <Td className="text-[var(--text-dim)]">Malicious package detection</Td>
+                      <Td>News headlines (after the breach)</Td>
+                      <Td>OpenSSF malicious feed (224k entries) cross-checked + sanity guard for false positives</Td>
+                    </Tr>
+                    <Tr>
+                      <Td className="text-[var(--text-dim)]">Typosquat detection</Td>
+                      <Td>Hope</Td>
+                      <Td>Levenshtein distance vs. popular packages, ratio-aware</Td>
+                    </Tr>
+                    <Tr>
                       <Td className="text-[var(--text-dim)]">Deprecation</Td>
                       <Td>Invisible</Td>
-                      <Td>Flagged with reason</Td>
+                      <Td>Flagged with reason + curated migration path with code diff</Td>
+                    </Tr>
+                    <Tr>
+                      <Td className="text-[var(--text-dim)]">Stack audit (N packages)</Td>
+                      <Td>N separate registry/CVE fetches</Td>
+                      <Td>One <code className="font-mono text-xs">audit_stack</code> call returns prioritized action list</Td>
+                    </Tr>
+                    <Tr>
+                      <Td className="text-[var(--text-dim)]">Token cost per decision</Td>
+                      <Td className="text-[var(--red)]">4–8k tokens (npm page + GitHub issues + CVE DB)</Td>
+                      <Td className="text-[var(--green)]">~300 tokens (one <code className="font-mono text-xs">ai_brief</code>)</Td>
                     </Tr>
                     <Tr>
                       <Td className="text-[var(--text-dim)]">Discovery of issues</Td>
@@ -849,28 +874,74 @@ export default function Home() {
             </Section>
 
             {/* Example JSON */}
-            <Section title="Sample response" description="What your agent sees back.">
-              <Card>
+            <Section title="Sample responses" description="Pick the format that fits your agent. All free, all zero-auth.">
+              <div className="grid md:grid-cols-2 gap-4">
+                <Card>
+                  <CardBody>
+                    <div className="flex items-center justify-between mb-2">
+                      <code className="text-xs font-mono text-[var(--text-dim)]">
+                        GET /api/ai/brief/npm/request
+                      </code>
+                      <CopyButton text="curl https://depscope.dev/api/ai/brief/npm/request" />
+                    </div>
+                    <p className="text-[11px] text-[var(--text-faded)] mb-2">~300 tokens · drop-in for LLM system prompts</p>
+                    <pre className="bg-[var(--bg-input)] border border-[var(--border)] rounded p-3 text-xs font-mono overflow-x-auto leading-relaxed text-[var(--text-dim)]">
+{`PACKAGE npm/request@2.88.2  (Apache-2.0)
+`}<span className="text-[var(--red)]">{`VERDICT: AVOID — DEPRECATED`}</span>{`
+HEALTH: 32/100 (critical)
+DOWNLOADS_WEEK: 15,181,809
+VULNS: 1 (active_exploited: 0)
+DEPRECATED_BECAUSE: request has been deprecated
+`}<span className="text-[var(--green)]">{`ALTERNATIVES: axios; got; node-fetch`}</span>{`
+SOURCE: depscope.dev (canonical)`}
+                    </pre>
+                  </CardBody>
+                </Card>
+                <Card>
+                  <CardBody>
+                    <div className="flex items-center justify-between mb-2">
+                      <code className="text-xs font-mono text-[var(--text-dim)]">
+                        GET /api/check/npm/express
+                      </code>
+                      <CopyButton text="curl https://depscope.dev/api/check/npm/express" />
+                    </div>
+                    <p className="text-[11px] text-[var(--text-faded)] mb-2">Full JSON · 18 fields incl. KEV/EPSS, malicious, typosquat</p>
+                    <pre className="bg-[var(--bg-input)] border border-[var(--border)] rounded p-3 text-xs font-mono overflow-x-auto leading-relaxed text-[var(--text-dim)]">
+{`{
+  `}<span className="text-[var(--purple)]">&quot;health&quot;</span>{`: { `}<span className="text-[var(--purple)]">&quot;score&quot;</span>{`: `}<span className="text-[var(--accent)]">80</span>{`, `}<span className="text-[var(--purple)]">&quot;risk&quot;</span>{`: `}<span className="text-[var(--green)]">&quot;low&quot;</span>{` },
+  `}<span className="text-[var(--purple)]">&quot;vulnerabilities&quot;</span>{`: {
+    `}<span className="text-[var(--purple)]">&quot;count&quot;</span>{`: `}<span className="text-[var(--green)]">0</span>{`,
+    `}<span className="text-[var(--purple)]">&quot;actively_exploited_count&quot;</span>{`: `}<span className="text-[var(--green)]">0</span>{`,
+    `}<span className="text-[var(--purple)]">&quot;details&quot;</span>{`: [{ `}<span className="text-[var(--purple)]">&quot;vuln_id&quot;</span>{`, `}<span className="text-[var(--purple)]">&quot;in_kev&quot;</span>{`, `}<span className="text-[var(--purple)]">&quot;epss_prob&quot;</span>{`, `}<span className="text-[var(--purple)]">&quot;threat_tier&quot;</span>{` }]
+  },
+  `}<span className="text-[var(--purple)]">&quot;malicious&quot;</span>{`: { `}<span className="text-[var(--purple)]">&quot;is_malicious&quot;</span>{`: `}<span className="text-[var(--green)]">false</span>{` },
+  `}<span className="text-[var(--purple)]">&quot;typosquat&quot;</span>{`: { `}<span className="text-[var(--purple)]">&quot;is_suspected&quot;</span>{`: `}<span className="text-[var(--green)]">false</span>{` },
+  `}<span className="text-[var(--purple)]">&quot;maintainer_trust&quot;</span>{`: { `}<span className="text-[var(--purple)]">&quot;bus_factor_3m&quot;</span>{`, `}<span className="text-[var(--purple)]">&quot;alerts&quot;</span>{` },
+  `}<span className="text-[var(--purple)]">&quot;recommendation&quot;</span>{`: { `}<span className="text-[var(--purple)]">&quot;action&quot;</span>{`: `}<span className="text-[var(--green)]">&quot;safe_to_use&quot;</span>{` }
+}`}
+                    </pre>
+                  </CardBody>
+                </Card>
+              </div>
+              <Card className="mt-3">
                 <CardBody>
                   <div className="flex items-center justify-between mb-2">
                     <code className="text-xs font-mono text-[var(--text-dim)]">
-                      GET /api/check/npm/express
+                      POST /api/ai/stack — audit a whole stack in one call
                     </code>
-                    <CopyButton text="curl https://depscope.dev/api/check/npm/express" />
+                    <CopyButton text={`curl -X POST https://depscope.dev/api/ai/stack -H 'content-type: application/json' -d '{"packages":[{"ecosystem":"npm","package":"express"},{"ecosystem":"npm","package":"request"},{"ecosystem":"npm","package":"lodash"}]}'`} />
                   </div>
                   <pre className="bg-[var(--bg-input)] border border-[var(--border)] rounded p-3 text-xs font-mono overflow-x-auto leading-relaxed text-[var(--text-dim)]">
-{`{
-  `}<span className="text-[var(--purple)]">&quot;health&quot;</span>{`: {
-    `}<span className="text-[var(--purple)]">&quot;score&quot;</span>{`: `}<span className="text-[var(--accent)]">80</span>{`,
-    `}<span className="text-[var(--purple)]">&quot;risk&quot;</span>{`: `}<span className="text-[var(--green)]">&quot;low&quot;</span>{`
-  },
-  `}<span className="text-[var(--purple)]">&quot;recommendation&quot;</span>{`: {
-    `}<span className="text-[var(--purple)]">&quot;action&quot;</span>{`: `}<span className="text-[var(--green)]">&quot;safe_to_use&quot;</span>{`
-  },
-  `}<span className="text-[var(--purple)]">&quot;vulnerabilities&quot;</span>{`: {
-    `}<span className="text-[var(--purple)]">&quot;count&quot;</span>{`: `}<span className="text-[var(--green)]">0</span>{`
-  }
-}`}
+{`STACK AUDIT — 3 packages
+  ok: 2  risk: 1  critical: 0  total_dl_week: 253,800,813
+
+ACTION ITEMS:
+  1. `}<span className="text-[var(--yellow)]">{`REPLACE: npm/request@2.88.2 deprecated → suggested: axios, got`}</span>{`
+
+PACKAGES:
+  npm/express@5.2.1  health:80  vulns:0
+  npm/request@2.88.2  health:32  vulns:1
+  npm/lodash@4.18.1  health:97  vulns:0`}
                   </pre>
                 </CardBody>
               </Card>

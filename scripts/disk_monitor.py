@@ -20,6 +20,9 @@ from datetime import datetime, timezone
 from email.message import EmailMessage
 from pathlib import Path
 
+SMTP_USER = "depscope@cuttalo.com"
+SMTP_PASS = "REDACTED_SMTP"
+
 ROOT = Path("/home/deploy/depscope")
 PROTECTED = {
     ROOT / "backups",

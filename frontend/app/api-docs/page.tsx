@@ -30,6 +30,10 @@ const ENDPOINTS: Endpoint[] = [
   { method: "GET", path: "/api/bugs/{ecosystem}/{package}", desc: "Known bugs for a package, optionally filtered by version.", example: "curl 'https://depscope.dev/api/bugs/npm/react?version=19.0.0'" },
   { method: "GET", path: "/api/bugs/search", desc: "Full-text search across the bug database.", example: "curl 'https://depscope.dev/api/bugs/search?q=hydration'" },
   { method: "POST", path: "/api/scan", desc: "Audit an entire project's dependencies at once (max 100 packages).", example: 'curl -X POST https://depscope.dev/api/scan -H "Content-Type: application/json" -d \'{"ecosystem":"npm","packages":{"express":"^4.0"}}\'' },
+  { method: "GET", path: "/api/ai/brief/{ecosystem}/{package}", desc: "AI-native compact package brief (~300 tokens, plain text). Drop-in for LLM system prompts. Returns a verdict (SAFE / AVOID / URGENT / DO NOT INSTALL) + health + vulns + alternatives.", example: "curl https://depscope.dev/api/ai/brief/npm/request" },
+  { method: "POST", path: "/api/ai/stack", desc: "One-shot audit of a whole dependency stack (up to 50 packages). Returns prioritized action items (REMOVE NOW / URGENT / REPLACE / REVIEW). Replaces N per-package calls.", example: "curl -X POST https://depscope.dev/api/ai/stack -H 'content-type: application/json' -d '{\"packages\":[{\"ecosystem\":\"npm\",\"package\":\"express\"},{\"ecosystem\":\"npm\",\"package\":\"request\"}]}'" },
+  { method: "GET", path: "/api/migration/{ecosystem}/{from}/{to}", desc: "Curated migration path with literal before/after code diff, rationale, breaking changes, estimated effort. Covers deprecated \u2192 modern (request\u2192axios, moment\u2192dayjs, urllib2\u2192requests, flask\u2192fastapi, ...).", example: "curl https://depscope.dev/api/migration/npm/request/axios" },
+  { method: "GET", path: "/api/ecosystems", desc: "Supported ecosystems with package/vulnerability/deprecated counts and registry URLs.", example: "curl https://depscope.dev/api/ecosystems" },
   { method: "GET", path: "/api/now", desc: "Current UTC date/time. Useful for agents to check server time.", example: "curl https://depscope.dev/api/now" },
   { method: "GET", path: "/api/stats", desc: "Coverage and ecosystem statistics.", example: "curl https://depscope.dev/api/stats" },
 ];
@@ -64,7 +68,7 @@ export default function ApiDocsPage() {
                 <dt className="text-[var(--text-dim)]">Format</dt>
                 <dd>JSON (UTF-8)</dd>
                 <dt className="text-[var(--text-dim)]">MCP tools</dt>
-                <dd>20 tools available at <a href="https://mcp.depscope.dev/mcp" className="text-[var(--accent)] hover:underline">mcp.depscope.dev/mcp</a> (remote, zero install)</dd>
+                <dd>23 tools available at <a href="https://mcp.depscope.dev/mcp" className="text-[var(--accent)] hover:underline">mcp.depscope.dev/mcp</a> (remote, zero install)</dd>
               </dl>
             </CardBody>
           </Card>

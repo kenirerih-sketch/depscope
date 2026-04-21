@@ -70,16 +70,110 @@ curl -X POST https://depscope.dev/api/scan \\
           <pre className="bg-[var(--bg)] rounded-lg p-4 text-sm text-[var(--accent)] overflow-x-auto">https://depscope.dev/openapi-gpt.json</pre>
         </div>
 
+        {/* MCP — remote */}
+        <div className="card p-6">
+          <h2 className="text-xl font-bold mb-2">MCP服务器 (Claude Code / Desktop / Cursor)</h2>
+          <p className="text-sm text-[var(--text-dim)] mb-4">23个包智能工具，零配置。推荐使用远程MCP端点：</p>
+          <pre className="bg-[var(--bg)] rounded-lg p-4 text-sm text-[var(--accent)] overflow-x-auto whitespace-pre-wrap">{`# 添加到 ~/.claude/mcp_servers.json 或 Cursor mcp.json
+{
+  "mcpServers": {
+    "depscope": { "url": "https://mcp.depscope.dev/mcp" }
+  }
+}
+
+# 23个可用工具。AI智能体最常用的:
+#   ai_brief         — 300 token的包判定
+#   audit_stack      — 一次调用审计N个包
+#   get_migration_path — 从已弃用迁移到现代包的代码差异`}</pre>
+        </div>
+
+        {/* CLI */}
+        <div className="card p-6">
+          <h2 className="text-xl font-bold mb-2">CLI — 安装前一行审计</h2>
+          <p className="text-sm text-[var(--text-dim)] mb-4">在npm上发布为 depscope-cli。需要Node 18+。</p>
+          <pre className="bg-[var(--bg)] rounded-lg p-4 text-sm text-[var(--accent)] overflow-x-auto whitespace-pre-wrap">{`# 安装前审计（CI友好，关键问题返回exit 1）
+npx -y depscope-cli audit express request lodash
+
+# 从清单文件审计
+npx -y depscope-cli audit --file package.json
+npx -y depscope-cli audit --file requirements.txt
+
+# 已弃用 → 现代包的代码差异
+npx -y depscope-cli migration npm request axios
+
+# 单个包的AI简报（约300 tokens，可粘贴到系统提示）
+npx -y depscope-cli brief npm/express`}</pre>
+        </div>
+
+        {/* Migration Path */}
+        <div className="card p-6">
+          <h2 className="text-xl font-bold mb-2">迁移路径 (已弃用 → 现代包，含代码差异)</h2>
+          <p className="text-sm text-[var(--text-dim)] mb-4">精选迁移路径，提供可直接应用的 before/after 代码片段。通过 MCP get_migration_path 或 REST API 调用。</p>
+          <pre className="bg-[var(--bg)] rounded-lg p-4 text-sm text-[var(--accent)] overflow-x-auto whitespace-pre-wrap">{`# MCP工具调用 (第23个工具)
+{"name":"get_migration_path","arguments":{"ecosystem":"npm","from_package":"request","to_package":"axios"}}
+
+# REST API
+curl https://depscope.dev/api/migration/npm/request/axios
+curl https://depscope.dev/api/migration/pypi/urllib2/requests
+curl https://depscope.dev/api/migration/npm/moment/dayjs
+
+# 返回: rationale, effort_minutes, diff_examples[], breaking_changes[]`}</pre>
+        </div>
+
+        {/* VS Code */}
+        <div className="card p-6">
+          <h2 className="text-xl font-bold mb-2">VS Code (Copilot / Cline / Continue.dev)</h2>
+          <p className="text-sm text-[var(--text-dim)] mb-4">VS Code 本身不内置 MCP — 通过任意支持 MCP 的 AI 扩展接入。配置相同的 URL 即可。</p>
+          <pre className="bg-[var(--bg)] rounded-lg p-4 text-sm text-[var(--accent)] overflow-x-auto whitespace-pre-wrap">{`// 1) VS Code + GitHub Copilot (MCP 预览版)
+//    Settings: "chat.mcp.enabled": true
+//    创建 .vscode/mcp.json (工作区) 或全局配置:
+{
+  "servers": {
+    "depscope": { "type": "http", "url": "https://mcp.depscope.dev/mcp" }
+  }
+}
+
+// 2) VS Code + Cline — Settings UI → MCP Servers → Add
+//    URL: https://mcp.depscope.dev/mcp
+
+// 3) VS Code + Continue.dev (~/.continue/config.json)
+{
+  "mcpServers": [
+    { "name": "depscope",
+      "transport": { "type": "sse", "url": "https://mcp.depscope.dev/mcp" } }
+  ]
+}
+
+// 4) 后备方案 (无 MCP 扩展): .vscode/tasks.json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "DepScope: audit",
+      "type": "shell",
+      "command": "npx -y depscope-cli audit --file package.json",
+      "problemMatcher": []
+    }
+  ]
+}`}</pre>
+        </div>
+
         {/* GitHub Actions */}
         <div className="card p-6">
           <h2 className="text-xl font-bold mb-2">GitHub Actions</h2>
-          <p className="text-sm text-[var(--text-dim)] mb-4">添加到CI/CD流水线：</p>
-          <pre className="bg-[var(--bg)] rounded-lg p-4 text-sm text-[var(--accent)] overflow-x-auto whitespace-pre-wrap">{`- name: DepScope Audit
-  run: |
-    curl -s -X POST https://depscope.dev/api/scan \\
-      -H "Content-Type: application/json" \\
-      -d "{\\"ecosystem\\":\\"npm\\",\\"packages\\":$(cat package.json | jq '.dependencies')}" \\
-      | jq '.project_risk'`}</pre>
+          <p className="text-sm text-[var(--text-dim)] mb-4">在PR检查中自动阻止已弃用/恶意/被利用的软件包：</p>
+          <pre className="bg-[var(--bg)] rounded-lg p-4 text-sm text-[var(--accent)] overflow-x-auto whitespace-pre-wrap">{`name: Dependency audit
+on: [pull_request, push]
+
+jobs:
+  depscope:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cuttalo/depscope-audit-action@v1
+        with:
+          manifest: package.json
+          fail-on: critical   # critical | risk | none`}</pre>
         </div>
 
         {/* Python */}

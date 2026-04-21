@@ -5,12 +5,15 @@ Run daily via cron. Only sends 1 follow-up per recipient (tracked by campaign='l
 import asyncio, asyncpg, smtplib, secrets, random, re
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.utils import formataddr
+from email.utils import formataddr, make_msgid, formatdate
 from datetime import datetime, timezone
 
+SMTP_USER = "depscope@cuttalo.com"
+SMTP_PASS = "REDACTED_SMTP"
+
 DB_URL = "postgresql://depscope:REDACTED_DB@localhost:5432/depscope"
-SMTP_HOST = "10.10.0.130"
-SMTP_PORT = 25
+SMTP_HOST = "mail.cuttalo.com"
+SMTP_PORT = 587
 FROM = "depscope@cuttalo.com"
 FROM_NAME = "Vincenzo Rubino — Cuttalo srl"
 BASE = "https://depscope.dev"
@@ -106,11 +109,17 @@ def send_one(row, body_md, subject):
     msg["From"] = formataddr((FROM_NAME, FROM))
     msg["To"] = row["to_email"] if not row["to_name"] else formataddr((row["to_name"], row["to_email"]))
     msg["Subject"] = subject
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain="cuttalo.com")
     msg["Reply-To"] = FROM
     msg["List-Unsubscribe"] = f"<mailto:{FROM}?subject=unsubscribe>"
     msg.attach(MIMEText(plain_text(body_md), "plain", "utf-8"))
     msg.attach(MIMEText(md_to_html(body_md), "html", "utf-8"))
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as s:
+        s.ehlo()
+        s.starttls()
+        s.ehlo()
+        s.login(SMTP_USER, SMTP_PASS)
         s.sendmail(FROM, [row["to_email"]], msg.as_string())
 
 

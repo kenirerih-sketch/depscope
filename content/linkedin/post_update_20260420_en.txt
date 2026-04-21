@@ -1,0 +1,39 @@
+🔍 Update 72h after DepScope launch — real data, not theatre
+
+3 days ago I posted on OpenAI Community a tip about making ChatGPT verify packages before suggesting installs. Since then, the public API traffic has been telling me something interesting about how AI coding agents actually interact with package registries.
+
+The problem, in three pieces.
+
+Millions of AI coding agents — ChatGPT, Claude, Cursor, Copilot, Windsurf — recommend npm / PyPI / Cargo packages every day to millions of developers. Three things are broken at the same time:
+
+1. Tokens burned at scale. Each agent fetches raw registry JSON, ~3 KB of keys the model doesn't need, to make a single install decision. Billions of times a day. Real LLM input cost, real compute energy.
+
+2. Stale training data. Cut off 6–12 months before the answer: recent CVEs missed, deprecated libraries still suggested, package names occasionally hallucinated. I see API requests every day for packages that don't exist — the model invented the name from plausible naming patterns.
+
+3. No shared layer. Every agent hits the public registries independently, reinventing the lookup. Zero cache efficiency, zero consolidated signal.
+
+What DepScope is.
+
+depscope.dev is the shared layer: OSV + GitHub Advisory Database as a live API, a dedicated endpoint returning 74% smaller payload than raw registry JSON for the same install decision, and an MCP server for direct Claude / Cursor / Windsurf / Claude Desktop integration. 17 ecosystems indexed including the long-tail that the big players ignore (Homebrew, CRAN, Hex, CocoaPods, Hackage, Conda). Open infrastructure, MIT client, EU-hosted.
+
+72h of real public-traffic data.
+
+→ 334 organic npm downloads of the MCP server
+→ 13,800+ API calls on /api/check/* today alone
+→ The hallucinated-package signal is confirmed and daily
+→ First reply from a senior tech journalist at The Register, real coverage conversation opened
+
+Who we are, briefly.
+
+DepScope is a diversification project inside a company that has been operating in digital for years. No VC raised, not looking to. This gives us a different cost structure from the classical supply chain security players, and the freedom to keep the public API genuinely public without quarterly conversion pressure.
+
+The underlying positioning.
+
+OSV (Google) and Sigstore (Linux Foundation) are precedents of neutral public infrastructure for the supply chain — but they were designed for humans and CI, returning raw JSON. DepScope does the same job from an AI-native perspective: useful semantics in one round-trip, lightweight payload, endpoints shaped for LLM decisions rather than human reading.
+
+I don't know of anyone else building that specific layer today.
+
+👉 depscope.dev
+👉 claude mcp add depscope -- npx -y depscope-mcp
+
+#AI #DevTools #OpenSource #MCP #SupplyChainSecurity #AICodingAgents #npm #PyPI #Anthropic #OpenAI

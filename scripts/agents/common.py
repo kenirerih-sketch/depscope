@@ -10,10 +10,10 @@ from urllib.error import URLError
 DB_URL = os.getenv("DATABASE_URL", "postgresql://depscope:${DB_PASSWORD}@localhost:5432/depscope")
 
 # Email config
-IMAP_HOST = "10.10.0.130"
+IMAP_HOST = "mail.cuttalo.com"
 IMAP_PORT = 993
-SMTP_HOST = "10.10.0.130"
-SMTP_PORT = 25
+SMTP_HOST = "mail.cuttalo.com"
+SMTP_PORT = 587
 EMAIL_USER = "depscope@cuttalo.com"
 EMAIL_PASS = os.getenv("EMAIL_PASSWORD", "")
 EMAIL_FROM_NAME = "Vincenzo Rubino - DepScope"
