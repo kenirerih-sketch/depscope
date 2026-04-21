@@ -14,285 +14,18 @@ export const ECOSYSTEMS = [
 ];
 
 export const TOOLS = [
-  {
-    name: "check_package",
-    description:
-      "Full health report for a package: health score (0-100), vulnerabilities (CVE), latest version, deprecation, maintainer count, recommendation (safe_to_use | use_with_caution | update_required | find_alternative | do_not_use). ALWAYS call before suggesting `npm install`, `pip install`, or any dependency addition.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        package: { type: "string", description: "Package name (e.g. 'express', 'fastapi', 'serde')." },
-        version: { type: "string", description: "Specific version (optional; default = latest)." },
-      },
-      required: ["ecosystem", "package"],
-    },
-  },
-  {
-    name: "get_health_score",
-    description:
-      "Health score (0-100) only. Fastest endpoint when you just need a go/no-go. Score >= 70 is generally safe.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        package: { type: "string" },
-      },
-      required: ["ecosystem", "package"],
-    },
-  },
-  {
-    name: "get_vulnerabilities",
-    description:
-      "Known CVE / OSV advisories for a package filtered to affecting the latest version. Use before suggesting install on security-sensitive projects.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        package: { type: "string" },
-      },
-      required: ["ecosystem", "package"],
-    },
-  },
-  {
-    name: "get_latest_version",
-    description:
-      "Just the latest published version + deprecation flag. The cheapest call; use when you only need a version number.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        package: { type: "string" },
-      },
-      required: ["ecosystem", "package"],
-    },
-  },
-  {
-    name: "package_exists",
-    description:
-      "Boolean: does this exact package name exist in the registry? Use to avoid hallucinating package names when generating install commands.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        package: { type: "string" },
-      },
-      required: ["ecosystem", "package"],
-    },
-  },
-  {
-    name: "get_package_prompt",
-    description:
-      "Same info as check_package but returned as compact plain text optimized for inclusion in an LLM context (~74% fewer tokens than the JSON form).",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        package: { type: "string" },
-      },
-      required: ["ecosystem", "package"],
-    },
-  },
-  {
-    name: "compare_packages",
-    description:
-      "Side-by-side comparison (health, vulns, downloads, maintainers, last release) for 2-10 packages in the same ecosystem. Use when the user asks 'X vs Y' or 'which one should I pick'.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        packages: {
-          type: "array",
-          items: { type: "string" },
-          minItems: 2,
-          maxItems: 10,
-          description: "Package names to compare, e.g. ['express','fastify','hono'].",
-        },
-      },
-      required: ["ecosystem", "packages"],
-    },
-  },
-  {
-    name: "scan_project",
-    description:
-      "Audit an entire dependency list in one call. Returns per-package health + vulns + aggregate score. Max 100 packages per request.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        packages: {
-          type: "array",
-          items: { type: "string" },
-          description: "Package names (optionally with @version), up to 100.",
-          maxItems: 100,
-        },
-      },
-      required: ["ecosystem", "packages"],
-    },
-  },
-  {
-    name: "find_alternatives",
-    description:
-      "Curated replacement packages for a deprecated / unhealthy / legacy package. Returns name, reason, and whether the alternative is a language/stdlib built-in (e.g. `fs.rm` for rimraf). Use instead of guessing or inventing replacement names.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        package: { type: "string" },
-      },
-      required: ["ecosystem", "package"],
-    },
-  },
-  {
-    name: "get_breaking_changes",
-    description:
-      "Verified breaking changes between two major versions of a package, with migration hints. Call BEFORE suggesting a major-version bump.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        package: { type: "string" },
-        from_version: { type: "string" },
-        to_version: { type: "string" },
-      },
-      required: ["ecosystem", "package"],
-    },
-  },
-  {
-    name: "get_known_bugs",
-    description:
-      "Non-CVE known bugs per package version. Use when a user reports unexpected behavior — often it's a known bug with a documented fix.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        package: { type: "string" },
-        version: { type: "string" },
-      },
-      required: ["ecosystem", "package"],
-    },
-  },
-  {
-    name: "check_compatibility",
-    description:
-      "Check whether a stack (multi-package combination) is verified to work together.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        packages: {
-          type: "object",
-          description: "Package -> version map, e.g. {\"next\":\"15\",\"react\":\"19\"}.",
-          additionalProperties: { type: "string" },
-        },
-      },
-      required: ["packages"],
-    },
-  },
-  {
-    name: "resolve_error",
-    description:
-      "Map an error message / stack trace to a verified fix. Returns status, solution, confidence, source URL.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        error: { type: "string" },
-        context: { type: "object" },
-      },
-      required: ["error"],
-    },
-  },
-  {
-    name: "search_errors",
-    description: "Free-text search across the error-fix knowledge base.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        query: { type: "string" },
-        limit: { type: "integer", minimum: 1, maximum: 20, default: 10 },
-      },
-      required: ["query"],
-    },
-  },
-  {
-    name: "check_malicious",
-    description:
-      "Is this package flagged as malicious by OpenSSF/OSV? Call BEFORE suggesting install for any unfamiliar package.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        package: { type: "string" },
-      },
-      required: ["ecosystem", "package"],
-    },
-  },
-  {
-    name: "check_typosquat",
-    description:
-      "Is this package a suspected typosquat of a popular package? Use when name looks close to a common one.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        package: { type: "string" },
-      },
-      required: ["ecosystem", "package"],
-    },
-  },
-  {
-    name: "get_scorecard",
-    description: "OpenSSF Scorecard security score (0-10) for the linked GitHub repo.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        package: { type: "string" },
-      },
-      required: ["ecosystem", "package"],
-    },
-  },
-  {
-    name: "get_maintainer_trust",
-    description:
-      "Maintainer trust signals: bus factor, contributor count, ownership-change detection, primary author dominance.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        package: { type: "string" },
-      },
-      required: ["ecosystem", "package"],
-    },
-  },
-  {
-    name: "get_quality",
-    description:
-      "Package quality signals: criticality score, velocity, publish security (npm signed/attested, PyPI trusted publisher).",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        package: { type: "string" },
-      },
-      required: ["ecosystem", "package"],
-    },
-  },
-  {
-    name: "get_provenance",
-    description: "Cryptographic provenance attestations (SLSA/Sigstore) for npm/PyPI packages.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        ecosystem: { type: "string", enum: ECOSYSTEMS },
-        package: { type: "string" },
-      },
-      required: ["ecosystem", "package"],
-    },
-  },
+
   {
     name: "ai_brief",
     description:
-      "Ultra-compact package brief (~300 tokens, plain text) formatted for direct paste into LLM system prompts. Includes: verdict (SAFE/AVOID/URGENT/MALICIOUS), health, vulns, alternatives, maintainer alerts. PREFER THIS over check_package when you only need a decision. Replaces fetching npm/pypi pages + GitHub issues + security DBs (avg 4-8k tokens saved per call).",
+      "Ultra-compact package brief (~300 tokens, plain text) formatted for direct paste into LLM system prompts. Includes: verdict (SAFE/AVOID/URGENT/MALICIOUS), health, vulns, alternatives, maintainer alerts. PREFER THIS in 95% of agent use cases — only fall back to check_package if you need to programmatically read individual JSON fields. Replaces fetching npm/pypi pages + GitHub issues + security DBs (avg 4-8k tokens saved per call).",
+    annotations: {
+      title: "ai_brief",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -302,10 +35,17 @@ export const TOOLS = [
       required: ["ecosystem", "package"],
     },
   },
-  {
+    {
     name: "audit_stack",
     description:
       "One-shot audit of a full dependency list (up to 50 packages). Returns prioritized action items (REMOVE NOW / URGENT / REPLACE / REVIEW) and a stack-level summary. Use BEFORE executing `npm install axios express lodash` etc. to validate the whole set in a single call instead of N per-package checks.",
+    annotations: {
+      title: "audit_stack",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -325,10 +65,17 @@ export const TOOLS = [
       required: ["packages"],
     },
   },
-  {
+    {
     name: "get_migration_path",
     description:
       "Get a prescriptive migration plan from a deprecated/legacy package to its modern replacement. Returns rationale, before/after code diff examples ready to apply, breaking changes to handle, and estimated effort in minutes. USE THIS when you need to advise a user on replacing `request`→`axios`, `moment`→`dayjs`, `urllib2`→`requests`, `flask`→`fastapi`, etc. The code diff is literal and ready to paste into their codebase.",
+    annotations: {
+      title: "get_migration_path",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -337,6 +84,496 @@ export const TOOLS = [
         to_package: { type: "string", description: "Modern replacement package." },
       },
       required: ["ecosystem", "from_package", "to_package"],
+    },
+  },
+    {
+    name: "check_package",
+    description:
+      "Full machine-readable health report (JSON). Use ONLY when you need to PROGRAMMATICALLY parse fields (scoring, gating in CI, building UI). For most LLM use cases prefer ai_brief — same intelligence in ~300 tokens of plain text instead of ~2000 tokens of JSON. Returns: health score (0-100), vulnerabilities (CVE+KEV+EPSS), latest version, deprecation, maintainer count, recommendation.",
+    annotations: {
+      title: "check_package",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string", description: "Package name (e.g. 'express', 'fastapi', 'serde')." },
+        version: { type: "string", description: "Specific version (optional; default = latest)." },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+    {
+    name: "get_health_score",
+    description:
+      "Single number (0-100) — the cheapest call. Use ONLY when you have already decided to install and just need a go/no-go gate (>=70 = safe). For the verbal decision (SAFE/AVOID/URGENT) prefer ai_brief; for the JSON contract prefer check_package.",
+    annotations: {
+      title: "get_health_score",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+    {
+    name: "get_vulnerabilities",
+    description:
+      "Known CVE / OSV advisories for a package filtered to affecting the latest version. Use before suggesting install on security-sensitive projects.",
+    annotations: {
+      title: "get_vulnerabilities",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+    {
+    name: "get_latest_version",
+    description:
+      "Just the latest published version + deprecation flag. The cheapest call; use when you only need a version number.",
+    annotations: {
+      title: "get_latest_version",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+    {
+    name: "package_exists",
+    description:
+      "Boolean: does this exact package name exist in the registry? Use to avoid hallucinating package names when generating install commands.",
+    annotations: {
+      title: "package_exists",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+    {
+    name: "get_package_prompt",
+    description:
+      "Same info as check_package but returned as compact plain text optimized for inclusion in an LLM context (~74% fewer tokens than the JSON form).",
+    annotations: {
+      title: "get_package_prompt",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+    {
+    name: "compare_packages",
+    description:
+      "Side-by-side comparison (health, vulns, downloads, maintainers, last release) for 2-10 packages in the same ecosystem. Use when the user asks 'X vs Y' or 'which one should I pick'.",
+    annotations: {
+      title: "compare_packages",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        packages: {
+          type: "array",
+          items: { type: "string" },
+          minItems: 2,
+          maxItems: 10,
+          description: "Package names to compare, e.g. ['express','fastify','hono'].",
+        },
+      },
+      required: ["ecosystem", "packages"],
+    },
+  },
+    {
+    name: "scan_project",
+    description:
+      "Audit an entire dependency list in one call. Returns per-package health + vulns + aggregate score. Max 100 packages per request.",
+    annotations: {
+      title: "scan_project",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        packages: {
+          type: "array",
+          items: { type: "string" },
+          description: "Package names (optionally with @version), up to 100.",
+          maxItems: 100,
+        },
+      },
+      required: ["ecosystem", "packages"],
+    },
+  },
+    {
+    name: "find_alternatives",
+    description:
+      "Curated replacement packages for a deprecated / unhealthy / legacy package. Returns name, reason, and whether the alternative is a language/stdlib built-in (e.g. `fs.rm` for rimraf). Use instead of guessing or inventing replacement names.",
+    annotations: {
+      title: "find_alternatives",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+    {
+    name: "get_breaking_changes",
+    description:
+      "Verified breaking changes between two major versions of a package, with migration hints. Call BEFORE suggesting a major-version bump.",
+    annotations: {
+      title: "get_breaking_changes",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+        from_version: { type: "string" },
+        to_version: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+    {
+    name: "get_known_bugs",
+    description:
+      "Non-CVE known bugs per package version. Use when a user reports unexpected behavior — often it's a known bug with a documented fix.",
+    annotations: {
+      title: "get_known_bugs",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+        version: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+    {
+    name: "check_compatibility",
+    description:
+      "Check whether a stack (multi-package combination) is verified to work together.",
+    annotations: {
+      title: "check_compatibility",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        packages: {
+          type: "object",
+          description: "Package -> version map, e.g. {\"next\":\"15\",\"react\":\"19\"}.",
+          additionalProperties: { type: "string" },
+        },
+      },
+      required: ["packages"],
+    },
+  },
+    {
+    name: "resolve_error",
+    description:
+      "Map an error message / stack trace to a verified fix. Returns status, solution, confidence, source URL.",
+    annotations: {
+      title: "resolve_error",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        error: { type: "string" },
+        context: { type: "object" },
+      },
+      required: ["error"],
+    },
+  },
+    {
+    name: "search_errors",
+    description: "Free-text search across the error-fix knowledge base.",
+    name: "search_errors",
+    description: "Free-text search across the error-fix knowledge base.",
+    annotations: {
+      title: "search_errors",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string" },
+        limit: { type: "integer", minimum: 1, maximum: 20, default: 10 },
+      },
+      required: ["query"],
+    },
+  },
+    {
+    name: "check_malicious",
+    description:
+      "Is this package flagged as malicious by OpenSSF/OSV? Call BEFORE suggesting install for any unfamiliar package.",
+    annotations: {
+      title: "check_malicious",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+    {
+    name: "check_typosquat",
+    description:
+      "Is this package a suspected typosquat of a popular package? Use when name looks close to a common one.",
+    annotations: {
+      title: "check_typosquat",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+    {
+    name: "get_scorecard",
+    description: "OpenSSF Scorecard security score (0-10) for the linked GitHub repo.",
+    name: "get_scorecard",
+    description: "OpenSSF Scorecard security score (0-10) for the linked GitHub repo.",
+    annotations: {
+      title: "get_scorecard",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+    {
+    name: "get_maintainer_trust",
+    description:
+      "Maintainer trust signals: bus factor, contributor count, ownership-change detection, primary author dominance.",
+    annotations: {
+      title: "get_maintainer_trust",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+    {
+    name: "get_quality",
+    description:
+      "Package quality signals: criticality score, velocity, publish security (npm signed/attested, PyPI trusted publisher).",
+    annotations: {
+      title: "get_quality",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+    {
+    name: "get_provenance",
+    description: "Cryptographic provenance attestations (SLSA/Sigstore) for npm/PyPI packages.",
+    name: "get_provenance",
+    description: "Cryptographic provenance attestations (SLSA/Sigstore) for npm/PyPI packages.",
+    annotations: {
+      title: "get_provenance",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS },
+        package: { type: "string" },
+      },
+      required: ["ecosystem", "package"],
+    },
+  },
+    {
+    name: "get_trending",
+    description:
+      "Live trending packages across ecosystems with rank-change and weekly growth %. Use to answer 'what HTTP client/web framework/ORM is rising right now in npm/PyPI/Cargo'. Optional filter by ecosystem and rank scope.",
+    annotations: {
+      title: "get_trending",
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        ecosystem: { type: "string", enum: ECOSYSTEMS, description: "Optional. If omitted returns cross-ecosystem trending." },
+        scope: { type: "string", enum: ["all","week","day"], description: "Time window. Defaults to week." },
+        limit: { type: "integer", description: "Max results, 1-50. Default 20." },
+      },
+    },
+  },
+  {
+    name: "report_anomaly",
+    description:
+      "Report a technical anomaly observed while calling another DepScope tool: wrong field, stale data, false-positive malicious flag, missing migration path, mis-classified deprecation, etc. Strictly structured input - produces parseable issues that DepScope ingests as training/regression data. CALL THIS FIRST for any technical issue. Only fall back to contact_depscope for genuinely human-only categories (security disclosure, listing request that is not anomaly-shaped). 90% of agent feedback fits report_anomaly.",
+    annotations: {
+      title: "report_anomaly",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        tool_called: { type: "string", description: "DepScope tool that produced the anomaly (e.g. ai_brief, check_package, get_migration_path)." },
+        ecosystem: { type: "string", description: "Ecosystem of the involved package, if any (npm, pypi, ...)." },
+        package: { type: "string", description: "Package name involved, if any." },
+        version: { type: "string", description: "Package version involved, if any." },
+        observed: { type: "string", description: "What DepScope returned (1-1500 chars)." },
+        expected: { type: "string", description: "What you expected to see (1-1500 chars). Be concrete." },
+        evidence_url: { type: "string", description: "URL to authoritative source (registry page, GHSA, CVE, repo, ...) supporting your expectation." },
+      },
+      required: ["tool_called", "observed", "expected"],
+    },
+  },
+    {
+    name: "contact_depscope",
+    description:
+      "Open an inbound ticket with the DepScope team. ONLY 3 valid categories - restrict your usage: (a) `bug` = a wrong or missing data point you observed in a DepScope tool response; (b) `listing` = ask DepScope to index a package or ecosystem we do not cover yet; (c) `security` = security-relevant disclosure about DepScope itself. For unstructured technical feedback prefer the `report_anomaly` tool - it produces actionable issues. For partnership / press / generic feedback the user should email depscope@cuttalo.com directly. Returns a ticket reference id.",
+    annotations: {
+      title: "contact_depscope",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
+    inputSchema: {
+      type: "object",
+      properties: {
+        email: { type: "string", description: "Reply-to email of the requester (required)." },
+        subject: { type: "string", description: "Short subject line (3-200 chars)." },
+        body: { type: "string", description: "Message body (10-8000 chars). Be specific: include package name, ecosystem, error trace, repro steps when applicable." },
+        type: { type: "string", enum: ["bug","listing","security"], description: "Category of the request." },
+        name: { type: "string", description: "Sender display name (optional)." },
+        company: { type: "string", description: "Company / organization (optional)." },
+      },
+      required: ["email", "subject", "body"],
     },
   },
 ];
@@ -396,6 +633,52 @@ export async function handleToolCall(name, args) {
       }
       case "get_migration_path":
         return ok(await getJson(`/api/migration/${args.ecosystem}/${encodeURIComponent(args.from_package)}/${encodeURIComponent(args.to_package)}`));
+      case "contact_depscope": {
+        const body = JSON.stringify({
+          email: args.email,
+          subject: args.subject,
+          body: args.body,
+          type: args.type || "other",
+          name: args.name || "",
+          company: args.company || "",
+          source: "mcp",
+          consent: true,
+        });
+        const res = await fetch(`${API_BASE}/api/contact`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Depscope-Source": "mcp" },
+          body,
+        });
+        if (!res.ok) return fail(`contact_depscope failed: ${res.status} ${await res.text().catch(()=>"")}`);
+        return ok(await res.json());
+      }
+      case "report_anomaly": {
+        const body = JSON.stringify({
+          tool_called: args.tool_called,
+          ecosystem: args.ecosystem || "",
+          package: args.package || "",
+          version: args.version || "",
+          observed: args.observed,
+          expected: args.expected,
+          evidence_url: args.evidence_url || "",
+          source: "mcp",
+        });
+        const res = await fetch(`${API_BASE}/api/anomaly`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Depscope-Source": "mcp" },
+          body,
+        });
+        if (!res.ok) return fail(`report_anomaly failed: ${res.status} ${await res.text().catch(()=>"")}`);
+        return ok(await res.json());
+      }
+      case "get_trending": {
+        const params = new URLSearchParams();
+        if (args.ecosystem) params.set("ecosystem", args.ecosystem);
+        if (args.scope) params.set("scope", args.scope);
+        if (args.limit) params.set("limit", String(args.limit));
+        const qs = params.toString();
+        return ok(await getJson(`/api/trending${qs ? "?" + qs : ""}`));
+      }
       case "check_package": {
         const pkg = encodePkg(args.package);
         let path = `/api/check/${args.ecosystem}/${pkg}`;

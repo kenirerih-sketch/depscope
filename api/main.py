@@ -3705,6 +3705,66 @@ async def _contact_security_check(payload, request) -> tuple[bool, str]:
     return True, ""
 
 
+
+# ============================================================================
+# /api/anomaly — structured tool feedback from MCP agents.
+# Better signal than free-form contact: machine-parseable, regression-input-grade.
+# ============================================================================
+
+
+class _AnomalyRequest(BaseModel):
+    tool_called: str
+    ecosystem: str = ""
+    package: str = ""
+    version: str = ""
+    observed: str
+    expected: str
+    evidence_url: str = ""
+    source: str = "mcp"
+
+
+@app.post("/api/anomaly", tags=["public"])
+async def submit_anomaly(payload: _AnomalyRequest, request: Request = None):
+    tool = (payload.tool_called or "").strip()[:80]
+    if not tool:
+        raise HTTPException(400, "tool_called is required")
+    obs = (payload.observed or "").strip()
+    exp = (payload.expected or "").strip()
+    if len(obs) < 1 or len(obs) > 1500:
+        raise HTTPException(400, "observed must be 1-1500 chars")
+    if len(exp) < 1 or len(exp) > 1500:
+        raise HTTPException(400, "expected must be 1-1500 chars")
+    src = (payload.source or "mcp").lower().strip()[:20]
+    eco = (payload.ecosystem or "").lower().strip()[:30]
+    pkg = (payload.package or "").strip()[:255]
+    ver = (payload.version or "").strip()[:80]
+    ev = (payload.evidence_url or "").strip()[:500]
+    ua = ""
+    ip = ""
+    if request is not None:
+        ua = request.headers.get("user-agent", "")[:300]
+        ip = (request.headers.get("x-forwarded-for") or request.client.host if request.client else "") or ""
+        ip = ip.split(",")[0].strip()[:60]
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rid = await conn.fetchval(
+            """
+            INSERT INTO anomaly_reports
+                (tool_called, ecosystem, package, version, observed, expected,
+                 evidence_url, source, user_agent, ip_addr, status, created_at)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'new',NOW())
+            RETURNING id
+            """,
+            tool, eco, pkg, ver, obs, exp, ev, src, ua, ip,
+        )
+    return {
+        "ok": True,
+        "id": rid,
+        "message": "Thanks. Anomaly recorded — we use these as regression inputs to improve the dataset.",
+    }
+
+
 @app.post("/api/contact", tags=["public"])
 async def submit_contact(payload: _ContactRequest, request: Request = None):
     """Submit a contact request (form, CLI, MCP, agent). Free, no auth."""
