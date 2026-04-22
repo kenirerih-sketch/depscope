@@ -1476,7 +1476,7 @@ async def fetch_homebrew(name: str) -> dict | None:
         "description": desc,
         "license": lic,
         "homepage": homepage,
-        "repository": "",
+        "repository": homepage if isinstance(homepage, str) and "github.com" in homepage else "",
         "downloads_weekly": downloads_30d // 4 if downloads_30d else 0,
         "maintainers_count": 1,  # Homebrew core maintained by collective
         "deprecated": deprecated,
