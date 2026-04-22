@@ -2554,6 +2554,8 @@ async def get_stats():
             SELECT ecosystem, package_name, COUNT(*) as searches
             FROM api_usage WHERE created_at > NOW() - INTERVAL '7 days'
             AND user_agent NOT LIKE '%Node%' AND user_agent NOT LIKE '%bot%' AND user_agent NOT LIKE '%crawl%'
+              AND package_name IS NOT NULL AND package_name <> ''
+              AND ecosystem IS NOT NULL AND ecosystem <> ''
             GROUP BY ecosystem, package_name ORDER BY searches DESC LIMIT 10
         """)
         eco_rows = await conn.fetch("SELECT ecosystem, COUNT(*) as cnt FROM packages GROUP BY ecosystem ORDER BY cnt DESC")
