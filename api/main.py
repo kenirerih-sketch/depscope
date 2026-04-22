@@ -2627,6 +2627,61 @@ async def admin_dashboard(request: Request):
     }
 
 
+@app.get("/.well-known/mcp.json", tags=["discovery"])
+async def mcp_manifest():
+    """MCP server discovery manifest — emerging standard used by Claude / Cursor /
+    Windsurf for one-click install. Mirrors the info in ai-plugin.json but shaped
+    around Model Context Protocol clients."""
+    return {
+        "name": "depscope",
+        "display_name": "DepScope",
+        "version": "0.6.0",
+        "protocol_version": "2024-11-05",
+        "description": (
+            "Package Intelligence for AI agents. Check health, vulnerabilities, "
+            "typosquats, malicious flags, alternatives, known bugs, breaking "
+            "changes, compat, error-to-fix across 17 ecosystems. 31k+ packages, "
+            "2.2k+ CVEs enriched with CISA KEV + EPSS. Zero auth, MIT."
+        ),
+        "vendor": {"name": "Cuttalo srl", "url": "https://depscope.dev",
+                   "contact": "depscope@cuttalo.com"},
+        "transport": {"type": "streamable-http",
+                       "url": "https://mcp.depscope.dev/mcp"},
+        "install": {
+            "claude_code": "claude mcp add depscope https://mcp.depscope.dev/mcp",
+            "cursor_json": {"mcpServers": {"depscope": {"url": "https://mcp.depscope.dev/mcp"}}},
+            "vscode_json": {"mcpServers": {"depscope": {"url": "https://mcp.depscope.dev/mcp"}}},
+            "local_stdio": {
+                "npm": "npm install -g depscope-mcp",
+                "config": {"mcpServers": {"depscope": {"command": "npx", "args": ["depscope-mcp"]}}},
+            },
+        },
+        "tools_count": 22,
+        "tools": [
+            "check_package", "check_bulk", "check_malicious", "check_typosquat",
+            "get_trust_signals", "get_vulnerabilities", "get_health_score",
+            "get_latest_version", "get_package_prompt", "package_exists",
+            "install_command", "pin_safe", "find_alternatives", "compare_packages",
+            "scan_project", "get_trending", "get_breaking_changes", "get_known_bugs",
+            "check_compatibility", "resolve_error", "get_migration_path", "contact_depscope",
+        ],
+        "auth": "none",
+        "rate_limit": {
+            "anonymous": "100 req/min",
+            "ai_whitelist": "200 req/min",
+            "note": "UAs containing ClaudeBot, GPTBot, Cursor, MCP-Client, Windsurf, Cline, Continue are whitelisted.",
+        },
+        "api_base": "https://depscope.dev/api",
+        "openapi": "https://depscope.dev/openapi.json",
+        "ai_plugin": "https://depscope.dev/.well-known/ai-plugin.json",
+        "llms_txt": "https://depscope.dev/llms.txt",
+        "source": "https://github.com/cuttalo/depscope",
+        "license": "MIT",
+        "privacy": "https://depscope.dev/privacy",
+        "terms": "https://depscope.dev/terms",
+    }
+
+
 @app.get("/.well-known/ai-plugin.json", tags=["discovery"])
 async def ai_plugin():
     return {
@@ -2634,7 +2689,7 @@ async def ai_plugin():
         "name_for_human": "DepScope",
         "name_for_model": "depscope",
         "description_for_human": "Check package health, vulnerabilities, error fixes and stack compatibility before installing. 17 ecosystems, MCP server (zero-install remote), 100% free.",
-        "description_for_model": "Use DepScope to check if a software package is safe, maintained, and up-to-date before suggesting it to install. Supports 17 ecosystems: npm, pypi, cargo, go, composer, maven, nuget, rubygems, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew. 30,000+ packages indexed, ~2,200 vulnerabilities tracked. Three verticals on one API: (1) package health via GET /api/check/{ecosystem}/{package} for full health report with vulns+score+recommendation, GET /api/prompt/{ecosystem}/{package} for LLM-optimized plain text (saves ~74% tokens), GET /api/compare/{ecosystem}/pkg1,pkg2 to compare, GET /api/alternatives/{ecosystem}/{package} for replacements, POST /api/scan to audit dependency lists. (2) error -> fix resolution via POST /api/error/resolve with a stack trace, GET /api/error?code=X for lookups. (3) stack compatibility via GET /api/compat?packages=next@16,react@19 to verify a combo before upgrading. Also GET /api/bugs/{ecosystem}/{package} for non-CVE known bugs per version. No authentication required for public endpoints. Optional API keys for higher limits. Completely free.",
+        "description_for_model": "Use DepScope to check if a software package is safe, maintained, and up-to-date before suggesting it to install. Supports 17 ecosystems: npm, pypi, cargo, go, composer, maven, nuget, rubygems, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew. 31,000+ packages indexed, 2,200+ CVEs enriched with CISA KEV + EPSS, 22 MCP tools. Three verticals on one API: (1) package health via GET /api/check/{ecosystem}/{package} for full health report with vulns+score+recommendation, GET /api/prompt/{ecosystem}/{package} for LLM-optimized plain text (saves ~74% tokens), GET /api/compare/{ecosystem}/pkg1,pkg2 to compare, GET /api/alternatives/{ecosystem}/{package} for replacements, POST /api/scan to audit dependency lists. (2) error -> fix resolution via POST /api/error/resolve with a stack trace, GET /api/error?code=X for lookups. (3) stack compatibility via GET /api/compat?packages=next@16,react@19 to verify a combo before upgrading. Also GET /api/bugs/{ecosystem}/{package} for non-CVE known bugs per version. No authentication required for public endpoints. Optional API keys for higher limits. Completely free.",
         "auth": {"type": "none"},
         "api": {"type": "openapi", "url": "https://depscope.dev/openapi.json"},
         "logo_url": "https://depscope.dev/logo.png",

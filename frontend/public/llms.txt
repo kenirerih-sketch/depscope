@@ -13,27 +13,31 @@
 # Ecosystems: npm, pypi, cargo, go, maven, nuget, rubygems, composer,
 # pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew.
 #
-# For MCP-capable agents: install the server directly:
-#   npm install -g depscope-mcp
-# Then add to your MCP config:
-#   {"mcpServers":{"depscope":{"command":"npx","args":["depscope-mcp"]}}}
+# For MCP-capable agents, prefer the remote URL (zero install, 22 tools):
+#   Claude Code: claude mcp add depscope https://mcp.depscope.dev/mcp
+#   Cursor:      add {"mcpServers":{"depscope":{"url":"https://mcp.depscope.dev/mcp"}}} to ~/.cursor/mcp.json
+#   VS Code:     add the same JSON to .vscode/mcp.json
+#   Windsurf/Cline/Continue: same remote URL.
+# Or local install: npm install -g depscope-mcp, then {"command":"npx","args":["depscope-mcp"]}
 #
-# Open infrastructure, MIT, no authentication required, 200 req/min.
-# Full setup walkthrough for humans: https://depscope.dev/agent-setup
+# Open infrastructure, MIT, no authentication required.
+# Rate limit: 100 req/min anonymous, 200/min for registered AI-agent UAs
+# (ClaudeBot, GPTBot, Cursor, MCP-Client, etc. are whitelisted).
+# Full setup walkthrough for humans: https://depscope.dev/integrate
 
 # DepScope
 > Package Intelligence for AI Agents
 
 DepScope checks package health, vulnerabilities, versions, error-to-fix resolution, and stack compatibility so AI agents don't have to. We do the work once, every agent benefits.
 
-Current scale: 14,700+ packages indexed across 17 ecosystems, 402 vulnerabilities tracked, 12 MCP tools, 3 verticals on one shared free API.
+Current scale: 31,000+ packages indexed across 17 ecosystems, 2,200+ vulnerabilities tracked (OSV+GHSA+CISA KEV+EPSS), 22 MCP tools, 3 verticals on one shared free API.
 
 Positioning: save tokens, save energy, ship safer code.
 
 ## API
 Base URL: https://depscope.dev
 Authentication: None required for public endpoints. Optional API keys (`ds_live_xxx` / `ds_test_xxx`) for higher limits and usage analytics via magic-link login.
-Rate Limit: 200 req/min anonymous
+Rate Limit: 100 req/min anonymous; 200/min for whitelisted AI UAs (ClaudeBot, GPTBot, Cursor, MCP-Client, ...)
 Response Format: JSON (or plain text on /api/prompt)
 
 ## Endpoints
@@ -190,15 +194,21 @@ npm, pypi, cargo, go, composer, maven, nuget, rubygems, pub, hex, swift, cocoapo
 - find_alternative: deprecated
 - do_not_use: critical vulnerabilities
 
-## MCP (14 tools)
+## MCP (22 tools — v0.6.0)
 npm install -g depscope-mcp
-Remote URL: https://depscope.dev/mcp
+Remote URL (recommended — zero install): https://mcp.depscope.dev/mcp
+One-line for Claude Code: claude mcp add depscope https://mcp.depscope.dev/mcp
 Tools:
-  Package health:   check_package, get_health_score, get_vulnerabilities,
-                    get_latest_version, package_exists, get_package_prompt,
-                    compare_packages, scan_project
-  Verticals:        find_alternatives, get_breaking_changes, get_known_bugs,
-                    check_compatibility, resolve_error, search_errors
+  Security-first:  check_malicious, check_typosquat, get_trust_signals,
+                   get_vulnerabilities
+  Package health:  check_package, get_package_prompt, get_health_score,
+                   get_latest_version, package_exists, check_bulk,
+                   install_command, pin_safe
+  Discovery:       find_alternatives, compare_packages, scan_project,
+                   get_trending
+  Verticals:       get_breaking_changes, get_known_bugs, check_compatibility,
+                   resolve_error, get_migration_path
+  Meta:            contact_depscope
 
 ## Integration
 - ChatGPT Actions: https://depscope.dev/openapi-gpt.json
