@@ -3053,238 +3053,268 @@ async def admin_sources(request: Request):
 
 @app.get("/openapi-gpt.json", include_in_schema=False)
 async def openapi_for_gpt():
-    """Cleaned OpenAPI spec for ChatGPT Actions."""
+    """Curated OpenAPI spec for ChatGPT Actions / Custom GPTs.
+
+    Kept under 30 operations (ChatGPT Actions hard limit). Ordered by
+    LLM-usefulness: /api/prompt first (74-79% token saving, verdict
+    pre-computed), then security-first (malicious/typosquat/vulns),
+    then health/discovery/verticals. Marked x-openai-isConsequential
+    false on all GETs so ChatGPT can invoke without per-call approval.
+    """
+    ECOS = ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget",
+            "rubygems", "pub", "hex", "swift", "cocoapods", "cpan",
+            "hackage", "cran", "conda", "homebrew"]
+
+    def _eco_param():
+        return {"name": "ecosystem", "in": "path", "required": True,
+                "schema": {"type": "string", "enum": ECOS}}
+
+    def _pkg_param():
+        return {"name": "package", "in": "path", "required": True,
+                "schema": {"type": "string"}}
+
+    def _get(op_id, summary, params, description=""):
+        return {"get": {
+            "operationId": op_id,
+            "summary": summary,
+            "description": description or summary,
+            "parameters": params,
+            "responses": {"200": {"description": "OK"}},
+            "x-openai-isConsequential": False,
+        }}
+
     return {
         "openapi": "3.1.0",
         "info": {
             "title": "DepScope",
-            "description": "Package Intelligence API for AI Agents. Check health, vulnerabilities, versions, find alternatives, search packages. Free, no auth.",
-            "version": "0.3.0",
+            "summary": "Package Intelligence for AI agents — health, vulns, typosquats, alternatives across 17 ecosystems.",
+            "description": (
+                "DepScope answers the questions AI coding agents keep getting wrong "
+                "when they install dependencies: does the package exist, is it "
+                "malicious or a typosquat, is it actively exploited (CISA KEV), is "
+                "it deprecated, what are the safe alternatives, what breaks when "
+                "upgrading v1→v2. 31,000+ packages across 17 ecosystems, "
+                "2,200+ CVEs enriched with EPSS + CISA KEV. Zero auth, 100 req/min "
+                "anonymous, MIT.\n\n"
+                "USAGE RULES FOR THE MODEL:\n"
+                "1. Before recommending any package install, call getPackagePrompt "
+                "(/api/prompt) — it returns a 150-token decision-ready brief "
+                "(79% fewer tokens than the full /check JSON). Drop the whole "
+                "response in the reply, the verdict line is already the answer.\n"
+                "2. If the name looks invented or wrong, call packageExists "
+                "(/api/exists) first. A `false` result means the name is "
+                "hallucinated — do NOT suggest it.\n"
+                "3. For security audits of a lockfile/requirements list, POST to "
+                "/api/scan once instead of calling /prompt in a loop.\n"
+                "4. Never fabricate package metadata. If /api/exists returns 404, "
+                "tell the user the package was not found instead of guessing."
+            ),
+            "version": "0.7.0",
+            "contact": {"name": "DepScope", "email": "depscope@cuttalo.com",
+                         "url": "https://depscope.dev"},
+            "license": {"name": "MIT",
+                         "url": "https://github.com/cuttalo/depscope/blob/main/LICENSE"},
         },
-        "servers": [{"url": "https://depscope.dev"}],
+        "servers": [{"url": "https://depscope.dev",
+                      "description": "Production"}],
         "paths": {
-            "/api/check/{ecosystem}/{package}": {
+            # ── 1. PREFERRED: /api/prompt ────────────────────────────
+            "/api/prompt/{ecosystem}/{package}": _get(
+                "getPackagePrompt",
+                "⭐ PREFERRED: LLM-ready plain-text brief (79% fewer tokens than /check).",
+                [_eco_param(), _pkg_param()],
+                "Returns a compact plain-text summary with health, vulnerabilities, "
+                "license, recommendation and last-release date — all pre-computed. "
+                "Use this before /api/check in almost every case: ~150 tokens vs ~700, "
+                "verdict is already in the `Recommendation:` line. Drop the response "
+                "straight into your reply.",
+            ),
+
+            # ── 2. Existence + security gates ────────────────────────
+            "/api/exists/{ecosystem}/{package}": _get(
+                "packageExists",
+                "Sub-60ms check: does this package exist on the registry?",
+                [_eco_param(), _pkg_param()],
+                "Fast path to rule out hallucinated names before any install "
+                "suggestion. Returns {exists: true|false}. If false, DO NOT "
+                "recommend the package.",
+            ),
+            "/api/malicious/{ecosystem}/{package}": _get(
+                "checkMalicious",
+                "CRITICAL: is the package flagged as malicious?",
+                [_eco_param(), _pkg_param()],
+                "Union of OpenSSF malicious-packages + OSV MAL-* advisories. Use "
+                "before every install suggestion — a `true` result means the "
+                "package has been flagged for data exfiltration, supply-chain "
+                "compromise, or crypto-mining and must NOT be installed.",
+            ),
+            "/api/typosquat/{ecosystem}/{package}": _get(
+                "checkTyposquat",
+                "Is this name a suspected typosquat of a popular package?",
+                [_eco_param(), _pkg_param()],
+                "Returns distance, legit_candidate and reason for suspected typosquat. "
+                "Use when the user-provided name is unusual or one letter away from "
+                "a well-known library.",
+            ),
+            "/api/vulns/{ecosystem}/{package}": _get(
+                "getVulnerabilities",
+                "Live CVEs affecting the latest version, enriched with EPSS + CISA KEV.",
+                [_eco_param(), _pkg_param()],
+                "Returns open vulnerabilities against the latest version (not "
+                "historical), each with EPSS probability (0-1), CISA KEV presence, "
+                "threat_tier (actively_exploited / likely_exploited / theoretical / "
+                "unknown). Use for security posture answers.",
+            ),
+
+            # ── 3. Full health report ────────────────────────────────
+            "/api/check/{ecosystem}/{package}": _get(
+                "checkPackage",
+                "Full JSON health report (use only when /prompt is insufficient).",
+                [_eco_param(), _pkg_param()],
+                "Returns the full structured report: health score (0-100) with "
+                "breakdown, vulnerabilities, versions, recommendation, bundle size, "
+                "TypeScript quality, maintainer trust, typosquat flag, scorecard. "
+                "Prefer /api/prompt unless you specifically need a field from here.",
+            ),
+            "/api/health/{ecosystem}/{package}": _get(
+                "getHealthScore",
+                "Just the 0-100 health score with breakdown.",
+                [_eco_param(), _pkg_param()],
+                "Lightweight — use when you only need the score and risk tier.",
+            ),
+            "/api/latest/{ecosystem}/{package}": _get(
+                "getLatestVersion",
+                "Latest version string + deprecation flag.",
+                [_eco_param(), _pkg_param()],
+                "Fastest endpoint. Use before suggesting any pin.",
+            ),
+
+            # ── 4. Discovery / comparison ────────────────────────────
+            "/api/alternatives/{ecosystem}/{package}": _get(
+                "getAlternatives",
+                "Curated alternatives for deprecated / unhealthy packages.",
+                [_eco_param(), _pkg_param()],
+                "Returns ranked list. Each entry has {name, reason, builtin}. "
+                "`builtin: true` flags stdlib replacements (fs.rm, crypto.randomUUID) "
+                "that are NOT installable from a registry.",
+            ),
+            "/api/compare/{ecosystem}/{packages_csv}": {
                 "get": {
-                    "operationId": "checkPackage",
-                    "summary": "Full package health check with vulnerabilities and recommendation",
+                    "operationId": "comparePackages",
+                    "summary": "Side-by-side comparison of 2–10 packages.",
+                    "description": "Comma-separated names. Returns ranked table with a winner field.",
                     "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
+                        _eco_param(),
+                        {"name": "packages_csv", "in": "path", "required": True,
+                         "schema": {"type": "string"},
+                         "description": "Comma-separated names (e.g. express,fastify,hono)"},
                     ],
-                    "responses": {"200": {"description": "Full health report"}},
-                }
-            },
-            "/api/latest/{ecosystem}/{package}": {
-                "get": {
-                    "operationId": "getLatestVersion",
-                    "summary": "Get just the latest version number. Use before any install suggestion.",
-                    "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
-                    ],
-                    "responses": {"200": {"description": "Latest version and deprecation status"}},
-                }
-            },
-            "/api/exists/{ecosystem}/{package}": {
-                "get": {
-                    "operationId": "checkExists",
-                    "summary": "Does this package exist? Use before suggesting any install.",
-                    "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
-                    ],
-                    "responses": {"200": {"description": "Existence check result"}},
+                    "responses": {"200": {"description": "OK"}},
+                    "x-openai-isConsequential": False,
                 }
             },
             "/api/search/{ecosystem}": {
                 "get": {
                     "operationId": "searchPackages",
-                    "summary": "Search packages by keyword. Use when user needs a package for a specific purpose.",
+                    "summary": "Free-text search within an ecosystem.",
+                    "description": "Use when the user needs a package for a specific purpose but hasn't named one.",
                     "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "q", "in": "query", "required": True, "schema": {"type": "string"}, "description": "Search keywords"},
-                        {"name": "limit", "in": "query", "required": False, "schema": {"type": "integer", "default": 10}},
+                        _eco_param(),
+                        {"name": "q", "in": "query", "required": True,
+                         "schema": {"type": "string"}, "description": "Keywords"},
+                        {"name": "limit", "in": "query", "required": False,
+                         "schema": {"type": "integer", "default": 10}},
                     ],
-                    "responses": {"200": {"description": "Search results"}},
+                    "responses": {"200": {"description": "OK"}},
+                    "x-openai-isConsequential": False,
                 }
             },
-            "/api/alternatives/{ecosystem}/{package}": {
-                "get": {
-                    "operationId": "getAlternatives",
-                    "summary": "Get alternative packages for deprecated or unhealthy ones",
-                    "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
-                    ],
-                    "responses": {"200": {"description": "List of alternatives with reasons"}},
-                }
-            },
-            "/api/compare/{ecosystem}/{packages_csv}": {
-                "get": {
-                    "operationId": "comparePackages",
-                    "summary": "Compare 2-10 packages side by side with winner",
-                    "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "packages_csv", "in": "path", "required": True, "schema": {"type": "string"}, "description": "Comma-separated names (express,fastify,hono)"},
-                    ],
-                    "responses": {"200": {"description": "Comparison with winner"}},
-                }
-            },
-            "/api/now": {
-                "get": {
-                    "operationId": "getCurrentTime",
-                    "summary": "Current UTC date and time",
-                    "parameters": [],
-                    "responses": {"200": {"description": "Current timestamp"}},
-                }
-            },
-            "/api/vulns/{ecosystem}/{package}": {
-                "get": {
-                    "operationId": "getVulnerabilities",
-                    "summary": "Known vulnerabilities for latest version",
-                    "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
-                    ],
-                    "responses": {"200": {"description": "Vulnerability list"}},
-                }
-            },
+
+            # ── 5. Verticals ─────────────────────────────────────────
             "/api/breaking/{ecosystem}/{package}": {
                 "get": {
                     "operationId": "getBreakingChanges",
-                    "summary": "Verified breaking changes between major versions with migration hints. Call BEFORE suggesting a major-version bump.",
+                    "summary": "v1→v2 breaking changes with migration hints.",
+                    "description": "Use BEFORE suggesting a major-version bump.",
                     "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
-                        {"name": "from_version", "in": "query", "required": False, "schema": {"type": "string"}, "description": "Optional starting major (e.g. '18', '14')."},
-                        {"name": "to_version", "in": "query", "required": False, "schema": {"type": "string"}, "description": "Optional target major (e.g. '19', '15')."},
+                        _eco_param(), _pkg_param(),
+                        {"name": "from_version", "in": "query", "required": False,
+                         "schema": {"type": "string"}},
+                        {"name": "to_version", "in": "query", "required": False,
+                         "schema": {"type": "string"}},
                     ],
-                    "responses": {"200": {"description": "Breaking changes with migration_hint per entry"}},
+                    "responses": {"200": {"description": "OK"}},
+                    "x-openai-isConsequential": False,
                 }
             },
             "/api/bugs/{ecosystem}/{package}": {
                 "get": {
                     "operationId": "getKnownBugs",
-                    "summary": "Non-CVE known bugs per package version (regressions, production incidents, edge cases not in CVE feeds).",
+                    "summary": "Non-CVE known bugs per version (regressions, prod incidents).",
+                    "description": "Use when the user reports unexpected behavior that isn't a CVE.",
                     "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
-                        {"name": "version", "in": "query", "required": False, "schema": {"type": "string"}, "description": "Filter to bugs affecting this version."},
+                        _eco_param(), _pkg_param(),
+                        {"name": "version", "in": "query", "required": False,
+                         "schema": {"type": "string"}},
                     ],
-                    "responses": {"200": {"description": "Known bug list with fix_version when available"}},
+                    "responses": {"200": {"description": "OK"}},
+                    "x-openai-isConsequential": False,
+                }
+            },
+            "/api/compat": {
+                "get": {
+                    "operationId": "checkCompat",
+                    "summary": "Stack compatibility verdict.",
+                    "description": "Pass a stack as `stack=next@16,react@19,prisma@6`. Returns verified | compatible | warning | untested.",
+                    "parameters": [
+                        {"name": "stack", "in": "query", "required": True,
+                         "schema": {"type": "string"}},
+                    ],
+                    "responses": {"200": {"description": "OK"}},
+                    "x-openai-isConsequential": False,
                 }
             },
             "/api/error/resolve": {
                 "post": {
                     "operationId": "resolveError",
-                    "summary": "POST an error message or stack trace; get a verified fix. Use instead of re-deriving diagnosis from scratch.",
-                    "requestBody": {
-                        "required": True,
-                        "content": {
-                            "application/json": {
-                                "schema": {
-                                    "type": "object",
-                                    "properties": {
-                                        "error": {"type": "string", "description": "Full error message or stack trace."},
-                                        "context": {"type": "object", "description": "Optional runtime/version context."},
-                                    },
-                                    "required": ["error"],
-                                }
-                            }
-                        },
-                    },
-                    "responses": {"200": {"description": "Match status + solution"}},
+                    "summary": "POST a stack trace → get fix steps.",
+                    "description": "Search the error-to-fix database. Returns exact_match | similar_matches | not_found with solution steps + source URL.",
+                    "requestBody": {"required": True, "content": {"application/json": {
+                        "schema": {"type": "object", "properties": {
+                            "error": {"type": "string", "description": "Error message or full stack trace"},
+                            "context": {"type": "object", "description": "Optional: ecosystem, package, version"},
+                        }, "required": ["error"]}
+                    }}},
+                    "responses": {"200": {"description": "OK"}},
+                    "x-openai-isConsequential": False,
                 }
             },
-            "/api/compat": {
-                "get": {
-                    "operationId": "checkCompatibility",
-                    "summary": "Check whether a package stack is verified to work together. Returns verified | compatible | incompatible | warning | untested.",
-                    "parameters": [
-                        {"name": "stack", "in": "query", "required": True, "schema": {"type": "string"}, "description": "Comma-separated name@version pairs, e.g. 'next@15,react@19,prisma@6'."},
-                    ],
-                    "responses": {"200": {"description": "Compatibility verdict + similar verified stacks"}},
-                }
-            },
-            "/api/malicious/{ecosystem}/{package}": {
-                "get": {
-                    "operationId": "checkMalicious",
-                    "summary": "CRITICAL SECURITY CHECK: is this package flagged as malicious by OpenSSF/OSV? Call before any install suggestion for unfamiliar package.",
-                    "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
-                    ],
-                    "responses": {"200": {"description": "Malicious flag + advisory_id + action"}},
-                }
-            },
-            "/api/typosquat/{ecosystem}/{package}": {
-                "get": {
-                    "operationId": "checkTyposquat",
-                    "summary": "Is this a suspected typosquat of a popular package? Returns likely legitimate targets with distance.",
-                    "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
-                    ],
-                    "responses": {"200": {"description": "Typosquat candidates"}},
-                }
-            },
-            "/api/scorecard/{ecosystem}/{package}": {
-                "get": {
-                    "operationId": "getScorecard",
-                    "summary": "OpenSSF Scorecard security posture score (0-10) for the linked GitHub repo.",
-                    "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
-                    ],
-                    "responses": {"200": {"description": "Scorecard score + at-risk checks"}},
-                }
-            },
-            "/api/maintainers/{ecosystem}/{package}": {
-                "get": {
-                    "operationId": "getMaintainerTrust",
-                    "summary": "Maintainer trust signals: bus factor, contributor count, account ages, ownership change detection.",
-                    "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
-                    ],
-                    "responses": {"200": {"description": "Maintainer trust data with alerts"}},
-                }
-            },
-            "/api/quality/{ecosystem}/{package}": {
-                "get": {
-                    "operationId": "getQuality",
-                    "summary": "Quality signals: OSS criticality score, download velocity trend, publish security (npm signed/attested, PyPI trusted).",
-                    "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
-                    ],
-                    "responses": {"200": {"description": "Quality signals"}},
-                }
-            },
-            "/api/provenance/{ecosystem}/{package}": {
-                "get": {
-                    "operationId": "getProvenance",
-                    "summary": "Cryptographic provenance attestations (SLSA/Sigstore) — proves package was built in verified CI pipeline.",
-                    "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
-                    ],
-                    "responses": {"200": {"description": "Provenance attestation data"}},
-                }
-            },
-            "/api/prompt/{ecosystem}/{package}": {
-                "get": {
-                    "operationId": "getPackagePrompt",
-                    "summary": "LLM-optimized plain-text summary of a package (~500 tokens) — compact decision brief for AI agents.",
-                    "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
-                    ],
-                    "responses": {"200": {"description": "Plain text prompt"}},
-                }
-            },
+
+            # ── 6. Trust / provenance ────────────────────────────────
+            "/api/scorecard/{ecosystem}/{package}": _get(
+                "getScorecard",
+                "OpenSSF Scorecard posture (0-10).",
+                [_eco_param(), _pkg_param()],
+                "Use for supply-chain security assessments.",
+            ),
+            "/api/maintainers/{ecosystem}/{package}": _get(
+                "getMaintainers",
+                "Maintainer trust: bus factor, recent activity, commit cadence.",
+                [_eco_param(), _pkg_param()],
+                "",
+            ),
+
+            # ── 7. Meta ──────────────────────────────────────────────
+            "/api/now": _get(
+                "getCurrentTime",
+                "Current UTC time (server clock).",
+                [],
+                "Use when you need the real date for age calculations.",
+            ),
         },
     }
+
+
 
 @app.get("/api/sitemap-packages", include_in_schema=False)
 async def sitemap_packages(
@@ -3691,66 +3721,6 @@ async def admin_automation(request: Request):
         "generated_at": datetime.now(timezone.utc).isoformat(),
     }
 
-
-async def openapi_for_gpt():
-    """Cleaned OpenAPI spec for ChatGPT Actions — only public API endpoints."""
-    return {
-        "openapi": "3.1.0",
-        "info": {
-            "title": "DepScope",
-            "description": "Package Intelligence API for AI Agents. Check health, vulnerabilities, versions before installing. Free, no auth.",
-            "version": "0.2.0",
-        },
-        "servers": [{"url": "https://depscope.dev"}],
-        "paths": {
-            "/api/check/{ecosystem}/{package}": {
-                "get": {
-                    "operationId": "checkPackage",
-                    "summary": "Full package health check",
-                    "description": "Returns health score, vulnerabilities, versions, and recommendation for a package.",
-                    "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}, "description": "Package name (e.g. express, fastapi, serde, @anthropic-ai/sdk)"},
-                    ],
-                    "responses": {"200": {"description": "Package health report"}},
-                }
-            },
-            "/api/compare/{ecosystem}/{packages_csv}": {
-                "get": {
-                    "operationId": "comparePackages",
-                    "summary": "Compare multiple packages",
-                    "description": "Compare 2-10 packages side by side. Returns ranked results with winner.",
-                    "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "packages_csv", "in": "path", "required": True, "schema": {"type": "string"}, "description": "Comma-separated package names (e.g. express,fastify,hono)"},
-                    ],
-                    "responses": {"200": {"description": "Comparison results"}},
-                }
-            },
-            "/api/health/{ecosystem}/{package}": {
-                "get": {
-                    "operationId": "getHealthScore",
-                    "summary": "Quick health score",
-                    "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
-                    ],
-                    "responses": {"200": {"description": "Health score 0-100"}},
-                }
-            },
-            "/api/vulns/{ecosystem}/{package}": {
-                "get": {
-                    "operationId": "getVulnerabilities",
-                    "summary": "Known vulnerabilities",
-                    "parameters": [
-                        {"name": "ecosystem", "in": "path", "required": True, "schema": {"type": "string", "enum": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"]}},
-                        {"name": "package", "in": "path", "required": True, "schema": {"type": "string"}},
-                    ],
-                    "responses": {"200": {"description": "Vulnerability list"}},
-                }
-            },
-        },
-    }
 
 
 @app.get("/api/admin/stats", include_in_schema=False)
