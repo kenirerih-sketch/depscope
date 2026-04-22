@@ -1902,6 +1902,44 @@ async def resolve_error(request: Request):
     return payload
 
 
+@app.get("/api/error/popular", tags=["errors"])
+async def list_errors_popular(limit: int = 500):
+    """Top error patterns by votes, used for sitemap generation and indexing."""
+    limit = max(1, min(int(limit or 500), 2000))
+    cache_key = f"errors:popular:{limit}"
+    cached = await cache_get(cache_key)
+    if cached:
+        cached["_cache"] = "hit"
+        return cached
+
+    from api.database import get_pool
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT hash, pattern, ecosystem, package_name, votes, updated_at
+            FROM errors
+            ORDER BY votes DESC NULLS LAST, id DESC
+            LIMIT $1
+            """,
+            limit,
+        )
+    items = [
+        {
+            "hash": r["hash"],
+            "pattern": r["pattern"],
+            "ecosystem": r["ecosystem"],
+            "package_name": r["package_name"],
+            "votes": r["votes"],
+            "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
+        }
+        for r in rows
+    ]
+    payload = {"total": len(items), "errors": items, "_cache": "miss"}
+    await cache_set(cache_key, payload, ttl=3600)
+    return payload
+
+
 @app.get("/api/error/{error_hash}", tags=["errors"])
 async def get_error(error_hash: str):
     """Get a specific error entry by its normalised-pattern SHA256."""
@@ -1994,6 +2032,11 @@ async def search_bugs_endpoint(q: str, limit: int = 20):
         matches = await search_bugs(q, limit)
     except Exception as e:
         raise HTTPException(500, f"Bug search failed: {e}")
+    # Trim description in list responses to keep payloads small.
+    for r in matches or []:
+        desc = r.get("description") or ""
+        if len(desc) > 200:
+            r["description"] = desc[:200] + "..."
     payload = {"query": q, "matches": matches, "total": len(matches), "_cache": "miss"}
     await cache_set(cache_key, payload, ttl=43200)  # 12h
     return payload
@@ -2143,7 +2186,7 @@ async def list_bugs_popular(limit: int = 100):
         rows = await conn.fetch(
             """
             SELECT p.ecosystem, p.name, COUNT(*) AS bug_count
-            FROM bugs b
+            FROM known_bugs b
             JOIN packages p ON p.id = b.package_id
             GROUP BY p.ecosystem, p.name
             ORDER BY bug_count DESC, p.name ASC
@@ -2156,44 +2199,6 @@ async def list_bugs_popular(limit: int = 100):
         for r in rows
     ]
     payload = {"total": len(items), "packages": items, "_cache": "miss"}
-    await cache_set(cache_key, payload, ttl=3600)
-    return payload
-
-
-@app.get("/api/error/popular", tags=["errors"])
-async def list_errors_popular(limit: int = 500):
-    """Top error patterns by votes, used for sitemap generation and indexing."""
-    limit = max(1, min(int(limit or 500), 2000))
-    cache_key = f"errors:popular:{limit}"
-    cached = await cache_get(cache_key)
-    if cached:
-        cached["_cache"] = "hit"
-        return cached
-
-    from api.database import get_pool
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT hash, pattern, ecosystem, package_name, votes, updated_at
-            FROM errors
-            ORDER BY votes DESC NULLS LAST, id DESC
-            LIMIT $1
-            """,
-            limit,
-        )
-    items = [
-        {
-            "hash": r["hash"],
-            "pattern": r["pattern"],
-            "ecosystem": r["ecosystem"],
-            "package_name": r["package_name"],
-            "votes": r["votes"],
-            "updated_at": r["updated_at"].isoformat() if r["updated_at"] else None,
-        }
-        for r in rows
-    ]
-    payload = {"total": len(items), "errors": items, "_cache": "miss"}
     await cache_set(cache_key, payload, ttl=3600)
     return payload
 
