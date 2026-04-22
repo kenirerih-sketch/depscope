@@ -44,12 +44,12 @@ interface PlanMetrics {
 interface ActionItem {
   id: string;
   area:
-    | "distribution"
+    | "exit"
     | "data"
+    | "distribution"
     | "frontend"
-    | "monetization"
-    | "reliability"
     | "dx"
+    | "reliability"
     | "growth";
   title: string;
   detail: string;
@@ -60,72 +60,182 @@ interface ActionItem {
 }
 
 // --------------------------------------------------------------------------- //
-// Action items — the real backlog, ordered by impact/effort
+// Potential acquirers — la bussola vera del piano
+// --------------------------------------------------------------------------- //
+
+interface Acquirer {
+  name: string;
+  tier: "competitor" | "platform" | "strategic_ai";
+  priceRangeEur: string;
+  fit: string;
+  theyWant: string;
+  signal: string;
+}
+
+const ACQUIRERS: Acquirer[] = [
+  {
+    name: "Snyk",
+    tier: "competitor",
+    priceRangeEur: "1-5M",
+    fit: "alto",
+    theyWant: "coverage cross-ecosystem (CPAN, Hackage, Hex, Pub — che loro non curano)",
+    signal: "storia acquisizioni: FossID, Manifest, Enso. Valutazione $8.5B. Compra dataset complementari.",
+  },
+  {
+    name: "Socket.dev",
+    tier: "competitor",
+    priceRangeEur: "1-3M",
+    fit: "alto",
+    theyWant: "MCP-first positioning, dataset agent-native",
+    signal: "Series B $65M 2024. Aggressivi su supply chain. Potrebbero voler presidio AI-agent.",
+  },
+  {
+    name: "GitHub (Microsoft)",
+    tier: "platform",
+    priceRangeEur: "5-20M",
+    fit: "medio-alto",
+    theyWant: "estensione Dependabot/Advisory Database a ecosistemi minori + MCP layer",
+    signal: "pattern storico: acquista adjacent per security tab. npm già loro.",
+  },
+  {
+    name: "Cloudflare",
+    tier: "platform",
+    priceRangeEur: "5-15M",
+    fit: "medio",
+    theyWant: "data product (Radar per open source) + posizionamento dev-friendly EU",
+    signal: "tendenza a comprare data asset (es. Zaraz). Amano prodotti API-first e neutrali.",
+  },
+  {
+    name: "Anthropic",
+    tier: "strategic_ai",
+    priceRangeEur: "10-50M",
+    fit: "solo se distribution massiva",
+    theyWant: "infrastruttura package intel default per Claude, ground-truth per ridurre hallucination",
+    signal: "prima dovremmo essere default in Claude Code o citati nei loro docs. Tempo necessario 18-36m.",
+  },
+  {
+    name: "OpenAI",
+    tier: "strategic_ai",
+    priceRangeEur: "10-50M",
+    fit: "solo se distribution massiva",
+    theyWant: "package intel per ChatGPT coding e agenti GPT",
+    signal: "acquisition playbook meno chiaro di Anthropic. Alta soglia d'ingresso.",
+  },
+  {
+    name: "Datadog",
+    tier: "platform",
+    priceRangeEur: "3-10M",
+    fit: "medio",
+    theyWant: "estensione SCA del loro security product",
+    signal: "recent push su application security. Hanno budget per bolt-on.",
+  },
+  {
+    name: "Sonatype / JFrog",
+    tier: "competitor",
+    priceRangeEur: "500k-2M",
+    fit: "basso-medio",
+    theyWant: "commoditization supply-chain, prezzo basso, acqui-hire",
+    signal: "incumbent enterprise lenti. Fallback di ultimo piano, non il target principale.",
+  },
+  {
+    name: "Chainguard",
+    tier: "competitor",
+    priceRangeEur: "2-8M",
+    fit: "medio",
+    theyWant: "dataset per ampliare 'secure by default' oltre container images",
+    signal: "ben finanziati, growing fast. Cultura engineering-heavy, potrebbero apprezzare codebase pulito.",
+  },
+  {
+    name: "Cursor / Windsurf / Vercel",
+    tier: "strategic_ai",
+    priceRangeEur: "3-15M",
+    fit: "asimmetrico",
+    theyWant: "integrazione nativa per dar valore ai loro agenti, differenziazione",
+    signal: "scenario sorprendente: se uno di loro ci integra di default, logico step successivo.",
+  },
+];
+
+// --------------------------------------------------------------------------- //
+// Action items — backlog centrato sull'EXIT, non sul revenue
 // --------------------------------------------------------------------------- //
 
 const INITIAL_ACTIONS: ActionItem[] = [
+  // =========== EXIT — la spina dorsale ===========
   {
-    id: "DIST-1",
-    area: "distribution",
-    title: "Publish MCP server v0.2.0 su npm",
+    id: "EXIT-1",
+    area: "exit",
+    title: "Scrivere exit_thesis.md (10 compratori, fit, prezzo, timeline)",
     detail:
-      "File aggiornato in /home/deploy/depscope/mcp-server, package.json 0.2.0 pronto. Comando: cd mcp-server && npm publish. Utente logged come depscope su npm.",
-    impact: "high",
-    effort: "XS",
-    owner: "Vincenzo",
-    status: "todo",
-  },
-  {
-    id: "DIST-2",
-    area: "distribution",
-    title: "Primo git commit + push su GitHub",
-    detail:
-      "Repo vuoto (0 commit). Committare tutto il progetto, push su github.com/cuttalo/depscope. Rende pubblico il lavoro.",
+      "Documento bussola: lista sopra formalizzata in file, con per ciascun compratore: cosa cerca, cosa DepScope offre, range prezzo, segnali concreti di interesse, timeline realistica. Da rivalutare ogni mese. Ogni decisione tecnica/business va misurata contro questo file.",
     impact: "high",
     effort: "S",
     owner: "Vincenzo",
     status: "todo",
   },
   {
-    id: "DIST-3",
-    area: "distribution",
-    title: "Submit Smithery + mcp.so",
+    id: "EXIT-2",
+    area: "exit",
+    title: "M&A signal log mensile (cosa compra il mercato, a quale multiplo)",
     detail:
-      "Due registry MCP principali. Richiedono solo repo GitHub pubblico + smithery.yaml (già presente). Tra poche ore si è indicizzati.",
-    impact: "high",
-    effort: "S",
-    owner: "Vincenzo",
-    status: "todo",
-  },
-  {
-    id: "DIST-4",
-    area: "distribution",
-    title: "Google Search Console: re-submit sitemap",
-    detail:
-      "Nuove URL (breaking, compat, errors, bugs, alternatives) vanno comunicate. Google può metterci settimane ad indicizzarle spontaneamente.",
+      "Foglio/JSON aggiornato mensilmente: tutte le acquisizioni nel nostro spazio (supply chain security, dev tools, MCP infra, data API). Prezzo, multiplo su ARR/utenti, acquirer. Segnala quando il mercato si apre/chiude. Alimenta l'exit_thesis.",
     impact: "medium",
-    effort: "XS",
+    effort: "S",
     owner: "Vincenzo",
     status: "todo",
   },
   {
-    id: "FE-1",
-    area: "frontend",
-    title: "Pagine SSR dettaglio /breaking/{eco}/{pkg} e /error/{hash}",
+    id: "EXIT-3",
+    area: "exit",
+    title: "IP + license audit (due-diligence ready)",
     detail:
-      "Hub /explore/* è client-side → non indicizzabile. URL statici per-package sono il vero driver SEO (chi googla stack trace arriva direttamente).",
+      "Ogni exit salta o si svaluta se la DD trova: GPL in codice proprietario, asset di terzi senza licenza, dati scraped senza ToS verificati, commit con credenziali, nomi dominio/trademark contesi. Audit da fare ORA mentre il repo è piccolo. Output: LICENSES.md + DATA_SOURCES.md.",
     impact: "high",
     effort: "M",
+    owner: "Vincenzo",
+    status: "todo",
+  },
+  {
+    id: "EXIT-4",
+    area: "exit",
+    title: "Public stats dashboard (trust signal per buyer)",
+    detail:
+      "Pagina /stats pubblica con numeri onesti: API calls/mese segmentate per tipo client, coverage ecosistemi, freshness dati, uptime. Un compratore serio guarda questa pagina prima di contattarti. Trasparenza = fiducia = multiplo più alto.",
+    impact: "medium",
+    effort: "S",
     owner: "Claude",
     status: "todo",
   },
   {
+    id: "EXIT-5",
+    area: "exit",
+    title: "Primo warm intro a 1 potenziale acquirer (via network EU/IT)",
+    detail:
+      "Non cold outreach \"vendimi DepScope\". Piuttosto: intro con un founder o advisor italiano che conosce VP Product di Snyk o GitHub. Messaggio: \"voglio un feedback sul dataset\". La conversazione si apre da sola. Timeline: mese 9-12.",
+    impact: "high",
+    effort: "M",
+    owner: "Vincenzo",
+    status: "todo",
+  },
+  {
+    id: "EXIT-6",
+    area: "exit",
+    title: "Trademark DepScope + clean ownership structure",
+    detail:
+      "Registrare marchio EU (EUIPO, ~900€ una tantum, 10 anni). Verificare che tutti gli asset (dominio, npm org, GitHub org, repo, server) siano intestati a UNA entità chiara (Cuttalo SRL o nuova NewCo). Asset frammentati = friction in DD, sconto 20-30%.",
+    impact: "medium",
+    effort: "M",
+    owner: "Vincenzo",
+    status: "todo",
+  },
+
+  // =========== DATA — il moat vero ===========
+  {
     id: "DATA-1",
     area: "data",
-    title: "Coprire i 8 ecosistemi vuoti (pub, hex, cocoapods, cpan, hackage, cran, conda, homebrew)",
+    title: "Coprire i 8 ecosistemi oggi vuoti (pub, hex, cocoapods, cpan, hackage, cran, conda, homebrew)",
     detail:
-      "Dichiariamo 17 ecosistemi ma 8 hanno verticali vuoti. Top 20 pkg/ecosystem con breaking e bugs = 160 entry di credibilità.",
-    impact: "medium",
+      "Snyk/Socket non coprono bene questi. È il nostro differenziale in DD. Top 50 pkg/ecosystem con breaking + bugs + alternatives = 400 entry di credibilità cross-ecosystem. Priorità ALTA nel modello acquisition: è esattamente ciò che un compratore vuole.",
+    impact: "high",
     effort: "L",
     owner: "Claude",
     status: "todo",
@@ -133,9 +243,9 @@ const INITIAL_ACTIONS: ActionItem[] = [
   {
     id: "DATA-2",
     area: "data",
-    title: "Pipeline crawler automatica GitHub changelog → breaking_changes",
+    title: "Crawler automatico GitHub changelog → breaking_changes",
     detail:
-      "Cron notturno su top-500 package per ecosystem. Parser regex di CHANGELOG.md + sezioni 'BREAKING'. Richiede GitHub token (free 5K req/h).",
+      "Cron notturno top-500 package/ecosystem. Parser CHANGELOG.md + sezioni BREAKING. GitHub token free 5k req/h. Senza automation i dati invecchiano in 6 mesi e il moat sparisce.",
     impact: "high",
     effort: "L",
     owner: "Claude",
@@ -144,53 +254,182 @@ const INITIAL_ACTIONS: ActionItem[] = [
   {
     id: "DATA-3",
     area: "data",
-    title: "Crawler GitHub issues closed+linked PR → errors",
+    title: "Crawler GitHub issues closed+fix → errors",
     detail:
-      "Top 100 repo (react, next, prisma, express). Label bug + state closed + comment con fix. Scale errors da 55 a ~500 con dati veri verificabili.",
+      "Top 100 repo (react, next, prisma, express, django, fastapi). Label bug + state closed + linked PR. Scale errors da 55 a ~500 entry verificabili con source URL.",
     impact: "high",
     effort: "L",
     owner: "Claude",
     status: "todo",
   },
   {
-    id: "MON-1",
-    area: "monetization",
-    title: "Attivare Stripe + checkout Piano Plus",
+    id: "DATA-4",
+    area: "data",
+    title: "Signal unico #1: cross-ecosystem typosquat detection",
     detail:
-      "Stripe config già presente (test keys), manca UI checkout + paywall rate-limit per tier. Senza questo, ZERO revenue possibile.",
+      "Snyk e Socket fanno typosquat intra-ecosystem. Nessuno fa cross (npm \"react-native\" vs pypi \"react-native\" — stesso nome, maintainer diverso = signal). Tabella typosquat_candidates esiste già. Estendere con cross-match. Feature brevettabile, irresistibile in pitch.",
     impact: "high",
     effort: "M",
+    owner: "Claude",
+    status: "todo",
+  },
+  {
+    id: "DATA-5",
+    area: "data",
+    title: "Signal unico #2: maintainer trust score",
+    detail:
+      "Score 0-100 per maintainer basato su: età account, numero commit ultimi 12m, diversità contributi, bad-actor signals, link a profili verified. Tabella maintainer_signals esiste. Va trasformata in score consultabile da API. Differenzia da competitor.",
+    impact: "high",
+    effort: "M",
+    owner: "Claude",
+    status: "todo",
+  },
+  {
+    id: "DATA-6",
+    area: "data",
+    title: "Signal unico #3: agent-query trend report (data product)",
+    detail:
+      "Aggregato anonimo di cosa chiedono gli agenti AI in tempo reale. \"Questa settimana react 19.2 ha il 340% di query in più: perché?\". Niente vende meglio a Cloudflare/Datadog di un data product originale. Richiede segmentazione accurata source=gpt/claude/cursor/mcp.",
+    impact: "medium",
+    effort: "M",
+    owner: "Claude",
+    status: "todo",
+  },
+
+  // =========== DISTRIBUTION — proof of traction ===========
+  {
+    id: "DIST-1",
+    area: "distribution",
+    title: "Publish MCP server v0.2.0 su npm",
+    detail:
+      "File aggiornato in /home/deploy/depscope/mcp-server, package.json 0.2.0 pronto. Comando: cd mcp-server && npm publish. Utente logged come depscope su npm. Downloads/settimana = metrica visibile in DD.",
+    impact: "high",
+    effort: "XS",
     owner: "Vincenzo",
     status: "todo",
   },
   {
-    id: "MON-2",
-    area: "monetization",
-    title: "Enforce rate limit per tier (anon 200/min, free 500/min, plus 2000/min, enterprise illimitato)",
+    id: "DIST-2",
+    area: "distribution",
+    title: "Primo git commit + push su GitHub (repo pubblico)",
     detail:
-      "Cache Redis esiste. Manca logica differenziata per user.plan in middleware auth. Senza tier non giustifichi il pricing.",
+      "Repo github.com/cuttalo/depscope attualmente vuoto. Nessun acquirer guarda un asset senza codice pubblico. Stars/forks/issues sono segnali nel funnel DD. Attenzione: scrub credenziali PRIMA del primo push (già fatto 21 Apr).",
+    impact: "high",
+    effort: "S",
+    owner: "Vincenzo",
+    status: "todo",
+  },
+  {
+    id: "DIST-3",
+    area: "distribution",
+    title: "Submit Smithery + mcp.so + Anthropic MCP registry",
+    detail:
+      "Tre registry MCP principali. Richiedono solo repo pubblico + smithery.yaml (già presente). Essere listed = comparire nelle ricerche dev + nelle demo di Cursor/Claude. Signal di adozione.",
+    impact: "high",
+    effort: "S",
+    owner: "Vincenzo",
+    status: "todo",
+  },
+  {
+    id: "DIST-4",
+    area: "distribution",
+    title: "Google Search Console: re-submit sitemap per 31k pagine",
+    detail:
+      "Ogni pagina pacchetto indicizzata è una porta SEO. 31k pagine = long-tail enorme. GSC + IndexNow + ping Bing.",
+    impact: "medium",
+    effort: "XS",
+    owner: "Vincenzo",
+    status: "todo",
+  },
+  {
+    id: "DIST-5",
+    area: "distribution",
+    title: "VS Code extension (wedge #1)",
+    detail:
+      "Estensione che scanna package.json/requirements.txt e mostra risk inline. Installs su marketplace = metrica DD diretta. Target: 3k install in 6 mesi.",
+    impact: "high",
+    effort: "M",
+    owner: "Claude",
+    status: "todo",
+  },
+  {
+    id: "DIST-6",
+    area: "distribution",
+    title: "GitHub Action depscope/check (wedge #2)",
+    detail:
+      "Action che commenta sulla PR segnalando dep rischiose. Già file action.yml presente. Da finire e pubblicare su marketplace. Target: 500 repo che la usano in 6 mesi.",
+    impact: "high",
+    effort: "M",
+    owner: "Claude",
+    status: "todo",
+  },
+
+  // =========== FRONTEND / SEO ===========
+  {
+    id: "FE-1",
+    area: "frontend",
+    title: "Pagine SSR dettaglio /breaking/{eco}/{pkg}, /error/{hash}",
+    detail:
+      "Hub /explore/* è client-side → non indicizzabile. URL statici per-package = driver SEO reale. Chi googla \"react 19 breaking changes\" deve atterrare diretto.",
+    impact: "high",
+    effort: "M",
+    owner: "Claude",
+    status: "todo",
+  },
+  {
+    id: "FE-2",
+    area: "frontend",
+    title: "Landing \"exit narrative\" chiara sul sito",
+    detail:
+      "Non una pricing page. Una pagina \"About / Vision\" che comunica: dataset cross-ecosystem, agent-native MCP, neutralità. Niente linguaggio SaaS/B2B. Parla alla narrativa di un acquirer (\"the package intel infrastructure\").",
+    impact: "medium",
+    effort: "S",
+    owner: "Vincenzo",
+    status: "todo",
+  },
+
+  // =========== DX — friction zero per sviluppatori ===========
+  {
+    id: "DX-1",
+    area: "dx",
+    title: "/api-docs aggiornato con tutti i 13 endpoint verticali",
+    detail:
+      "La pagina api-docs è vetrina DX. Se mancano endpoint = prodotto sotto-dimensionato in DD. OpenAPI spec auto-generata da FastAPI è già base, va curata.",
     impact: "medium",
     effort: "S",
     owner: "Claude",
     status: "todo",
   },
   {
-    id: "MON-3",
-    area: "monetization",
-    title: "Enterprise pilot program: 3 aziende gratis in cambio di case study",
+    id: "DX-2",
+    area: "dx",
+    title: "SDK Python (pip install depscope) + Node (npm install depscope)",
     detail:
-      "Target: 3 startup AI coding (tipo Continue.dev, Aider, Cline). Instance DepScope dedicata con loro stack priorità. Validazione prezzo enterprise.",
-    impact: "high",
+      "Non tutti usano MCP. Wrapper con 5 funzioni chiave. Downloads pypi/npm = vanity metric ma visibile in DD. Target: 1k downloads/mese combinati.",
+    impact: "medium",
     effort: "M",
-    owner: "Vincenzo",
+    owner: "Claude",
     status: "todo",
   },
   {
+    id: "DX-3",
+    area: "dx",
+    title: "Integration snippets (Cursor .mdc, Claude Code hooks, Windsurf, Aider)",
+    detail:
+      "Pagina /integrate con copy-paste snippets per ogni agent. Converte ogni user in contributor (recommanda DepScope al team). Bassa friction, alto multiplier.",
+    impact: "medium",
+    effort: "S",
+    owner: "Vincenzo",
+    status: "todo",
+  },
+
+  // =========== RELIABILITY — DD-ready ===========
+  {
     id: "REL-1",
     area: "reliability",
-    title: "Test suite minimale (pytest + fastapi TestClient)",
+    title: "Test suite minimale (pytest + FastAPI TestClient)",
     detail:
-      "Zero test oggi. Serve almeno: 1 test per endpoint pubblico (18 endpoint), 1 per vertical handler. Evita regressioni quando cambi il DB.",
+      "Zero test oggi = red flag in DD. Serve: 1 test per endpoint pubblico (18 endpoint), 1 per vertical handler. Non per qualità del prodotto oggi, per credibilità in DD domani.",
     impact: "medium",
     effort: "M",
     owner: "Claude",
@@ -201,7 +440,7 @@ const INITIAL_ACTIONS: ActionItem[] = [
     area: "reliability",
     title: "CI/CD via GitHub Actions (lint + test + deploy)",
     detail:
-      "Oggi tutto manuale via SSH. CI automatica → commit to main si auto-deploya. Richiede rel-1 prima.",
+      "Oggi tutto manuale via SSH. CI automatica = segnale maturità engineering in DD. Richiede REL-1 prima.",
     impact: "medium",
     effort: "M",
     owner: "Claude",
@@ -210,53 +449,22 @@ const INITIAL_ACTIONS: ActionItem[] = [
   {
     id: "REL-3",
     area: "reliability",
-    title: "alerts.py + daily_report.py includere KPI verticali",
+    title: "Uptime monitoring pubblico + status page",
     detail:
-      "Script esistenti monitorano solo API/DB/disk. Aggiungere alert se counter di una tabella verticale crolla, o se tempo risposta /api/breaking sale.",
+      "UptimeRobot / Betterstack gratis. Status page su status.depscope.dev. 99.9%+ visibile = trust signal. Un compratore che vede downtime page frequenti sconta il prezzo.",
     impact: "low",
-    effort: "S",
-    owner: "Claude",
-    status: "todo",
-  },
-  {
-    id: "DX-1",
-    area: "dx",
-    title: "Aggiornare /api-docs con tutti i 13 endpoint nuovi (breaking, bugs, compat, alternatives DB, resolve error)",
-    detail:
-      "La pagina api-docs è il biglietto da visita per DX. Se mancano i nuovi verticali sembra un prodotto sotto-dimensionato.",
-    impact: "medium",
-    effort: "S",
-    owner: "Claude",
-    status: "todo",
-  },
-  {
-    id: "DX-2",
-    area: "dx",
-    title: "SDK Python e Node.js pubblicati (pypi + npm)",
-    detail:
-      "Non tutti usano MCP. Un `pip install depscope` / `npm install depscope` wrapper con 5 funzioni chiave espande la TAM.",
-    impact: "low",
-    effort: "M",
-    owner: "Claude",
-    status: "todo",
-  },
-  {
-    id: "DX-3",
-    area: "dx",
-    title: "Esempi di integrazione (Cursor mdc, Claude Code hooks, Windsurf cascade)",
-    detail:
-      "Snippet copy-paste in /integrate. Converte ogni user dev in contributor gratuito (recommanda DepScope al team).",
-    impact: "medium",
     effort: "S",
     owner: "Vincenzo",
     status: "todo",
   },
+
+  // =========== GROWTH — mindshare ===========
   {
     id: "GROW-1",
     area: "growth",
-    title: "Show HN Launch coordinato (post + sub-comment da account alternativo)",
+    title: "Show HN relaunch coordinato (MCP npm publish + pagine SSR)",
     detail:
-      "Già post fatto su HN. Serve SECOND launch sincronizzato con publish MCP npm + pagina /explore/breaking nuova. Front page HN = 5-30k utenti.",
+      "Serve un secondo launch sincronizzato con DIST-1 + FE-1. Front page HN = 5-30k dev che vedono DepScope. Il Product Manager di Snyk/Socket/GitHub legge HN ogni giorno. Obiettivo primario è visibility radar, non conversion.",
     impact: "high",
     effort: "S",
     owner: "Vincenzo",
@@ -265,9 +473,9 @@ const INITIAL_ACTIONS: ActionItem[] = [
   {
     id: "GROW-2",
     area: "growth",
-    title: "Outreach cold email a 50 founder AI coding agents",
+    title: "Outreach a 50 founder AI coding agents (Cursor, Continue, Aider, Cline, Cody, Codeium, Windsurf)",
     detail:
-      "Target: Cursor, Continue, Aider, Cline, Cody, Codeium, Windsurf. Template di 4 righe: 'questo è DepScope, risolve X, prova con curl Y'.",
+      "Email 4 righe: \"questo è DepScope, risolve X, prova con curl Y\". Ogni integrazione pubblica (anche non ufficiale) è un signal per l'acquirer. Obiettivo: 3-5 integrazioni comunitarie in 6 mesi.",
     impact: "high",
     effort: "M",
     owner: "Vincenzo",
@@ -276,27 +484,49 @@ const INITIAL_ACTIONS: ActionItem[] = [
   {
     id: "GROW-3",
     area: "growth",
-    title: "Dev.to + Medium articoli tecnici (3 pezzi su error→fix, compat matrix, breaking)",
+    title: "Articoli Dev.to + Medium (3 pezzi tecnici su dataset uniqueness)",
     detail:
-      "Long-tail SEO permanente. Ogni pezzo è una porta d'ingresso con keyword specifica (tipo 'React 19 breaking changes guide').",
+      "\"I scanned 31k packages across 17 ecosystems, here's what I found\" / \"Cross-ecosystem typosquat is a real threat\" / \"Building agent-native package intel with MCP\". Long-tail SEO permanente + pitch indiretto.",
     impact: "medium",
     effort: "M",
     owner: "Vincenzo",
     status: "todo",
   },
+  {
+    id: "GROW-4",
+    area: "growth",
+    title: "Submission a awesome-mcp, awesome-agents, awesome-security",
+    detail:
+      "Curated lists su GitHub con decine di migliaia di stars. PR per essere inclusi = 0 sforzo, alto ROI. Appare nelle ricerche dev + nei radar di chi traccia il mercato.",
+    impact: "medium",
+    effort: "XS",
+    owner: "Vincenzo",
+    status: "todo",
+  },
+  {
+    id: "GROW-5",
+    area: "growth",
+    title: "Citation mining: fare in modo che Claude/ChatGPT ci citino nelle risposte",
+    detail:
+      "ClaudeBot + GPTBot stanno già crawlando aggressivamente (22k call/settimana combinate). Ottimizzare contenuto pagine pacchetto perché sia estraibile (schema.org, dati strutturati, risposte complete). Quando un utente chiede \"is package X safe?\" il modello deve poter citare DepScope. È il moat invisibile.",
+    impact: "high",
+    effort: "M",
+    owner: "Claude",
+    status: "todo",
+  },
 ];
 
 // --------------------------------------------------------------------------- //
-// Component
+// Component helpers
 // --------------------------------------------------------------------------- //
 
 const AREA_LABEL: Record<ActionItem["area"], string> = {
+  exit: "Exit / M&A",
+  data: "Dati / Moat",
   distribution: "Distribuzione",
-  data: "Dati",
   frontend: "Frontend/SEO",
-  monetization: "Monetizzazione",
-  reliability: "Affidabilità",
   dx: "DX/Docs",
+  reliability: "Reliability",
   growth: "Crescita",
 };
 
@@ -314,12 +544,28 @@ const EFFORT_LABEL: Record<ActionItem["effort"], string> = {
   XL: "~2 settimane",
 };
 
-const STORAGE_KEY = "ds_plan_actions_v1";
+const TIER_LABEL: Record<Acquirer["tier"], string> = {
+  competitor: "Competitor diretto",
+  platform: "Piattaforma",
+  strategic_ai: "AI strategico",
+};
+
+const TIER_COLOR: Record<Acquirer["tier"], string> = {
+  competitor: "var(--yellow)",
+  platform: "var(--accent)",
+  strategic_ai: "var(--red)",
+};
+
+const STORAGE_KEY = "ds_plan_actions_v2_exit";
 
 function n(v: number | null | undefined): string {
   if (v == null) return "—";
   return v.toLocaleString("it-IT");
 }
+
+// --------------------------------------------------------------------------- //
+// Page component
+// --------------------------------------------------------------------------- //
 
 export default function AdminPlanPage() {
   const [apiKey, setApiKey] = useState("");
@@ -386,7 +632,7 @@ export default function AdminPlanPage() {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-[var(--surface)] border border-[var(--border)] rounded-lg p-6">
-          <h1 className="text-xl font-semibold mb-1">Admin · Business Plan</h1>
+          <h1 className="text-xl font-semibold mb-1">Admin · Exit Thesis</h1>
           <p className="text-sm text-[var(--text-dim)] mb-4">
             Solo admin. Inserisci la API key amministrativa.
           </p>
@@ -424,30 +670,34 @@ export default function AdminPlanPage() {
       <main className="max-w-6xl mx-auto px-4 py-8">
         <header className="mb-8">
           <div className="text-[11px] font-mono uppercase tracking-wider text-[var(--accent)] mb-2">
-            Admin · Business Plan
+            Admin · Exit Thesis
           </div>
           <h1 className="text-3xl font-semibold text-[var(--text)] mb-2">
-            DepScope — piano serio, onesto, eseguibile
+            DepScope — acquisition-only playbook
           </h1>
           <p className="text-sm text-[var(--text-dim)] max-w-2xl">
-            Questa pagina pesca i numeri veri dal database in tempo reale. Le azioni sotto sono tracciabili —
-            spunta ciò che hai completato, lo stato si salva nel browser. Aggiornato oggi.
+            Questa pagina non è più un business plan. È una bussola per un obiettivo unico:
+            <strong className="text-[var(--text)]"> essere acquisita in 12-24 mesi</strong> da un player
+            strategico per dataset cross-ecosystem + distribuzione agent-native. Nessun SaaS tier, nessun Stripe,
+            nessun enterprise pilot. Ogni azione si misura su un solo criterio: rende DepScope più attraente per un compratore?
           </p>
         </header>
 
-        {/* Executive summary */}
+        {/* Executive summary — exit-first */}
         <section className="mb-10 border-l-4 border-[var(--accent)] pl-4">
-          <h2 className="text-lg font-semibold mb-2">Executive summary</h2>
+          <h2 className="text-lg font-semibold mb-2">Tesi in una frase</h2>
           <p className="text-sm text-[var(--text)] leading-relaxed">
-            DepScope è un&apos;infrastruttura di <em>ground truth</em> per agenti AI che scrivono codice.
-            Aggregare registry package + vulnerabilità + errori + compatibilità + breaking changes una volta,
-            servirli via MCP/REST a milioni di agenti. Oggi: {n(v.packages)} pacchetti indicizzati su {ecoDecl} ecosistemi
-            dichiarati, {n(m.usage.api_calls_total)} chiamate totali, {m.users.total} utenti registrati, 0€ MRR, 0 clienti paganti.
-            Siamo in <strong>fase pre-revenue</strong>: prodotto tecnico solido, distribuzione da completare, monetizzazione inattiva.
+            DepScope è l&apos;unica infrastruttura di <em>ground truth</em> cross-ecosystem per agenti AI che scrivono codice,
+            costruita agent-native su MCP. Non compete con Snyk/Socket sulla monetizzazione: compete sull&apos;<strong>adozione
+            da parte degli agenti</strong> (Claude Code, Cursor, Windsurf, ChatGPT coding). Tra 12-24 mesi, uno dei big
+            del settore avrà bisogno di comprare quello che avremo costruito: copertura di ecosistemi minori + segnali
+            proprietari + presenza default nei flussi agentic. Oggi: {n(v.packages)} pacchetti, {ecoDecl} ecosistemi,
+            {" "}{n(m.usage.api_calls_total)} chiamate totali, ZERO revenue target — e va bene così. Il cashflow arriva da Cuttalo,
+            non da DepScope.
           </p>
         </section>
 
-        {/* Stato attuale live */}
+        {/* Stato attuale — numeri veri dal DB */}
         <section className="mb-10">
           <h2 className="text-lg font-semibold mb-4">Stato attuale — numeri veri dal DB</h2>
 
@@ -462,23 +712,23 @@ export default function AdminPlanPage() {
             <Metric label="Coverage" value={`${coverage}%`} sub="verticali / packages" />
           </div>
 
-          <h3 className="text-sm font-medium mt-6 mb-2 text-[var(--text-dim)]">Traffico</h3>
+          <h3 className="text-sm font-medium mt-6 mb-2 text-[var(--text-dim)]">Traffico (proof of traction per DD)</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <Metric label="API calls total" value={n(m.usage.api_calls_total)} sub="lifetime (bot esclusi)" />
+            <Metric label="API calls total" value={n(m.usage.api_calls_total)} sub="lifetime" />
             <Metric label="30 giorni" value={n(m.usage.api_calls_30d)} sub="" />
             <Metric label="7 giorni" value={n(m.usage.api_calls_7d)} sub="" />
             <Metric label="IP unici 30d" value={n(m.usage.unique_ips_30d)} sub="" />
           </div>
 
-          <h3 className="text-sm font-medium mt-6 mb-2 text-[var(--text-dim)]">Utenti & revenue</h3>
+          <h3 className="text-sm font-medium mt-6 mb-2 text-[var(--text-dim)]">Adozione (vanity per DD, non revenue)</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <Metric label="Utenti registrati" value={n(m.users.total)} sub={`${m.users.active_api_keys} API key attive`} />
-            <Metric label="Paying customers" value={n(m.revenue.paying_customers)} sub="Stripe non attivo" />
-            <Metric label="MRR" value={`${m.revenue.mrr_eur} €`} sub="zero ad oggi" />
             <Metric label="MCP npm" value={`v${m.distribution.mcp_npm_version_latest}`} sub="su disco, da publishare" />
+            <Metric label="Revenue target" value="0 €" sub="by design — exit-only" />
+            <Metric label="Runway" value="∞" sub="Cuttalo sostiene" />
           </div>
 
-          <h3 className="text-sm font-medium mt-6 mb-3 text-[var(--text-dim)]">Copertura per ecosistema</h3>
+          <h3 className="text-sm font-medium mt-6 mb-3 text-[var(--text-dim)]">Copertura per ecosistema (moat → DATA-1 critica)</h3>
           <div className="overflow-x-auto border border-[var(--border)] rounded">
             <table className="w-full text-sm">
               <thead className="bg-[var(--surface)] text-[11px] uppercase tracking-wider text-[var(--text-dim)]">
@@ -517,98 +767,316 @@ export default function AdminPlanPage() {
           </div>
         </section>
 
-        {/* Mercato */}
+        {/* Potential acquirers */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-3">Mercato & competitor (onesto)</h2>
-          <div className="space-y-3 text-sm text-[var(--text)] leading-relaxed">
-            <p>
-              <strong>Mercato primario</strong>: AI coding agents (Cursor ~500K utenti, Claude Code ~200K, Cline, Continue, Aider, Windsurf, Codeium).
-              TAM stimato dev utenti globali: ~30M dev professionisti nel 2026, ~15M toccano agenti AI mensilmente. Mercato cresce &gt;40% YoY.
-            </p>
-            <p>
-              <strong>Competitor diretti</strong>: Socket.dev (supply chain, enterprise 500€+/mese), Snyk (security, pricing enterprise), deps.dev (Google, gratis ma API grezze), Context7 (solo doc librerie, free), libraries.io (metadata grezzi).
-              Nessuno fa: 5 verticali integrati + MCP-native + 17 ecosistemi + EU-based.
-            </p>
-            <p>
-              <strong>Moat realistico</strong>: non è il codice (replicabile in 6 mesi da team serio). È la <em>curation dei dati</em> — 177+79+55+38+65 entry verificate a mano oggi, scalabile con pipeline. E la <em>neutralità svizzera</em>: chiunque può integrare, non siamo di Anthropic né di Google.
-            </p>
-            <p>
-              <strong>Window competitivo</strong>: stimo 18-24 mesi prima che Anthropic/Vercel/Google includano intelligence simile nei loro agent nativamente. Dopo, si vive sul moat dati + enterprise self-hosted.
-            </p>
-          </div>
-        </section>
-
-        {/* Revenue model */}
-        <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-3">Modello revenue — realistico</h2>
+          <h2 className="text-lg font-semibold mb-3">Compratori potenziali — la bussola</h2>
+          <p className="text-sm text-[var(--text-dim)] mb-4 max-w-3xl leading-relaxed">
+            Ogni decisione tecnica e di prodotto va misurata contro questa tabella. Se un&apos;azione non rende
+            DepScope più attraente per almeno UNO di questi compratori, non va fatta.
+          </p>
           <div className="overflow-x-auto border border-[var(--border)] rounded">
             <table className="w-full text-sm">
               <thead className="bg-[var(--surface)] text-[11px] uppercase tracking-wider text-[var(--text-dim)]">
                 <tr>
+                  <th className="text-left px-3 py-2">Compratore</th>
                   <th className="text-left px-3 py-2">Tier</th>
-                  <th className="text-left px-3 py-2">Prezzo</th>
-                  <th className="text-left px-3 py-2">Target</th>
-                  <th className="text-left px-3 py-2">Scenario 12 mesi</th>
+                  <th className="text-left px-3 py-2">Prezzo (€)</th>
+                  <th className="text-left px-3 py-2">Fit</th>
+                  <th className="text-left px-3 py-2">Cosa vuole</th>
+                  <th className="text-left px-3 py-2">Segnale</th>
                 </tr>
               </thead>
-              <tbody className="text-[var(--text)]">
+              <tbody>
+                {ACQUIRERS.map((a) => (
+                  <tr key={a.name} className="border-t border-[var(--border)] align-top">
+                    <td className="px-3 py-3 font-semibold">{a.name}</td>
+                    <td className="px-3 py-3">
+                      <span
+                        className="text-[11px] font-mono uppercase"
+                        style={{ color: TIER_COLOR[a.tier] }}
+                      >
+                        {TIER_LABEL[a.tier]}
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 font-mono text-xs whitespace-nowrap">{a.priceRangeEur}</td>
+                    <td className="px-3 py-3 text-xs">{a.fit}</td>
+                    <td className="px-3 py-3 text-xs text-[var(--text)] max-w-sm leading-relaxed">{a.theyWant}</td>
+                    <td className="px-3 py-3 text-xs text-[var(--text-dim)] max-w-sm leading-relaxed">{a.signal}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* Exit thesis — cosa vendiamo davvero */}
+        <section className="mb-10">
+          <h2 className="text-lg font-semibold mb-3">Cosa vendiamo quando vendiamo</h2>
+          <div className="space-y-3 text-sm text-[var(--text)] leading-relaxed">
+            <p>
+              <strong>1. Dataset curato cross-ecosystem</strong> — 17 ecosistemi, ~150k pacchetti attesi in 12 mesi,
+              signali proprietari (typosquat cross, maintainer trust, cooccurrence). Il codice sorgente è replicabile in 6 mesi;
+              i dati no. Il moat è qui.
+            </p>
+            <p>
+              <strong>2. Distribuzione agent-native</strong> — MCP server pubblicato, listed su Smithery/mcp.so/Anthropic registry,
+              npm package, VS Code extension, GitHub Action. La metrica che conta in DD: quanti agenti/dev ci usano mensilmente.
+            </p>
+            <p>
+              <strong>3. Brand + dominio + trademark</strong> — depscope.dev, marchio EU, presenza in awesome-list e articoli tecnici.
+              Un compratore vuole un asset pulito, non un progetto hobby.
+            </p>
+            <p>
+              <strong>4. Traffico e data signal</strong> — aggregato anonimo di cosa chiedono gli agenti AI. Questo è un data
+              product vendibile separatamente (tipo SimilarWeb per open source), interessante per Cloudflare/Datadog.
+            </p>
+            <p>
+              <strong>NON vendiamo</strong>: clienti paganti, ARR, team, certificazioni SOC2, contratti enterprise firmati.
+              Il compratore quelli se li costruisce dopo.
+            </p>
+          </div>
+        </section>
+
+        {/* Cost analysis — serio, basato su nuovo OVH RISE-M */}
+        <section className="mb-10">
+          <h2 className="text-lg font-semibold mb-3">Analisi costi reale — baseline OVH RISE-M dedicato</h2>
+          <p className="text-sm text-[var(--text-dim)] mb-4 max-w-3xl leading-relaxed">
+            Base di calcolo: server OVH RISE-M dedicato a DepScope (ordine 248764073, upfront 12 mesi).
+            Hardware: AMD Ryzen 9 9900X 12C/24T, 64GB RAM, 2x NVMe 476GB RAID1, 1 Gbps. Datacenter RBX6.
+            Scadenza 20 aprile 2027. Rinnovo annuale obbligato.
+          </p>
+
+          <h3 className="text-sm font-medium mt-4 mb-2 text-[var(--text-dim)]">Costi fissi (ricorrenti)</h3>
+          <div className="overflow-x-auto border border-[var(--border)] rounded mb-6">
+            <table className="w-full text-sm">
+              <thead className="bg-[var(--surface)] text-[11px] uppercase tracking-wider text-[var(--text-dim)]">
+                <tr>
+                  <th className="text-left px-3 py-2">Voce</th>
+                  <th className="text-right px-3 py-2">€/anno (netto)</th>
+                  <th className="text-right px-3 py-2">€/anno (IVA incl)</th>
+                  <th className="text-right px-3 py-2">€/mese</th>
+                  <th className="text-left px-3 py-2">Note</th>
+                </tr>
+              </thead>
+              <tbody className="font-mono tabular-nums text-[var(--text)]">
                 <tr className="border-t border-[var(--border)]">
-                  <td className="px-3 py-2 font-medium">Free (anon)</td>
-                  <td className="px-3 py-2 font-mono">0 €</td>
-                  <td className="px-3 py-2">Tutti: AI agents, dev, bot crawler</td>
-                  <td className="px-3 py-2">10-50k utenti unici/mese (growth driver)</td>
+                  <td className="px-3 py-2 font-sans">OVH RISE-M dedicato</td>
+                  <td className="text-right px-3 py-2">1.139,89</td>
+                  <td className="text-right px-3 py-2">1.390,67</td>
+                  <td className="text-right px-3 py-2">115,89</td>
+                  <td className="px-3 py-2 font-sans text-xs text-[var(--text-dim)]">upfront12, rinnovo apr 2027</td>
                 </tr>
                 <tr className="border-t border-[var(--border)]">
-                  <td className="px-3 py-2 font-medium">Plus (self-serve)</td>
-                  <td className="px-3 py-2 font-mono">19 €/mese</td>
-                  <td className="px-3 py-2">Dev individuali, rate-limit più alto, analytics proprie</td>
-                  <td className="px-3 py-2">50-200 paying → 950-3.800 €/mese</td>
+                  <td className="px-3 py-2 font-sans">Dominio depscope.dev</td>
+                  <td className="text-right px-3 py-2">12,00</td>
+                  <td className="text-right px-3 py-2">14,64</td>
+                  <td className="text-right px-3 py-2">1,22</td>
+                  <td className="px-3 py-2 font-sans text-xs text-[var(--text-dim)]">Cloudflare Registrar</td>
                 </tr>
                 <tr className="border-t border-[var(--border)]">
-                  <td className="px-3 py-2 font-medium">Team</td>
-                  <td className="px-3 py-2 font-mono">99 €/mese</td>
-                  <td className="px-3 py-2">Startup 5-30 dev, API keys condivise, dashboard team</td>
-                  <td className="px-3 py-2">5-20 team → 495-1.980 €/mese</td>
+                  <td className="px-3 py-2 font-sans">Domini difensivi (.com, .io, .ai)</td>
+                  <td className="text-right px-3 py-2">60,00</td>
+                  <td className="text-right px-3 py-2">73,20</td>
+                  <td className="text-right px-3 py-2">6,10</td>
+                  <td className="px-3 py-2 font-sans text-xs text-[var(--text-dim)]">proteggere brand pre-DD</td>
                 </tr>
                 <tr className="border-t border-[var(--border)]">
-                  <td className="px-3 py-2 font-medium">Enterprise (self-hosted)</td>
-                  <td className="px-3 py-2 font-mono">3-8k €/mese</td>
-                  <td className="px-3 py-2">Corpo 200+ dev, on-prem, SLA, custom stack priority</td>
-                  <td className="px-3 py-2">2-5 clienti → 6-40k €/mese</td>
+                  <td className="px-3 py-2 font-sans">Trademark EU (ammortizzato 10 anni)</td>
+                  <td className="text-right px-3 py-2">90,00</td>
+                  <td className="text-right px-3 py-2">90,00</td>
+                  <td className="text-right px-3 py-2">7,50</td>
+                  <td className="px-3 py-2 font-sans text-xs text-[var(--text-dim)]">€900 una tantum EUIPO</td>
+                </tr>
+                <tr className="border-t border-[var(--border)]">
+                  <td className="px-3 py-2 font-sans">Backup S3 OVH (Restic, ~60GB)</td>
+                  <td className="text-right px-3 py-2">24,00</td>
+                  <td className="text-right px-3 py-2">29,28</td>
+                  <td className="text-right px-3 py-2">2,44</td>
+                  <td className="px-3 py-2 font-sans text-xs text-[var(--text-dim)]">0,01 €/GB/mese GRA</td>
+                </tr>
+                <tr className="border-t border-[var(--border)]">
+                  <td className="px-3 py-2 font-sans">Cloudflare (DNS + Proxy)</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="px-3 py-2 font-sans text-xs text-[var(--text-dim)]">free tier</td>
+                </tr>
+                <tr className="border-t border-[var(--border)]">
+                  <td className="px-3 py-2 font-sans">Email (mail.cuttalo.com, self-hosted)</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="px-3 py-2 font-sans text-xs text-[var(--text-dim)]">condiviso con Cuttalo, 0 €/marginal</td>
+                </tr>
+                <tr className="border-t border-[var(--border)]">
+                  <td className="px-3 py-2 font-sans">GitHub / npm / pypi / Smithery</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="px-3 py-2 font-sans text-xs text-[var(--text-dim)]">free tier, public</td>
+                </tr>
+                <tr className="border-t-2 border-[var(--accent)] bg-[var(--surface)]">
+                  <td className="px-3 py-2 font-sans font-semibold">Totale fisso</td>
+                  <td className="text-right px-3 py-2 font-semibold">1.325,89</td>
+                  <td className="text-right px-3 py-2 font-semibold">1.597,79</td>
+                  <td className="text-right px-3 py-2 font-semibold">133,15</td>
+                  <td className="px-3 py-2 font-sans text-xs text-[var(--text-dim)]">baseline 100% allocabile a DepScope</td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <p className="text-sm text-[var(--text-dim)] mt-3 leading-relaxed">
-            <strong>Target mese 12</strong>: ~8-45k € MRR se distribuzione e monetizzazione partono. <strong>Onestà</strong>: senza attivare Stripe e aprire
-            enterprise pilot, ZERO revenue possibile. Oggi il prodotto tecnicamente potrebbe fare 3-5k € MRR subito
-            ma il tap è chiuso per mancanza di checkout.
+
+          <h3 className="text-sm font-medium mb-2 text-[var(--text-dim)]">Costi variabili (scalano con traffico)</h3>
+          <div className="overflow-x-auto border border-[var(--border)] rounded mb-6">
+            <table className="w-full text-sm">
+              <thead className="bg-[var(--surface)] text-[11px] uppercase tracking-wider text-[var(--text-dim)]">
+                <tr>
+                  <th className="text-left px-3 py-2">Voce</th>
+                  <th className="text-right px-3 py-2">Oggi</th>
+                  <th className="text-right px-3 py-2">Mese 6</th>
+                  <th className="text-right px-3 py-2">Mese 12</th>
+                  <th className="text-right px-3 py-2">Mese 18</th>
+                  <th className="text-left px-3 py-2">Trigger</th>
+                </tr>
+              </thead>
+              <tbody className="font-mono tabular-nums text-[var(--text)]">
+                <tr className="border-t border-[var(--border)]">
+                  <td className="px-3 py-2 font-sans">Traffico stimato (call/giorno)</td>
+                  <td className="text-right px-3 py-2">~11k</td>
+                  <td className="text-right px-3 py-2">~50k</td>
+                  <td className="text-right px-3 py-2">~200k</td>
+                  <td className="text-right px-3 py-2">~500k</td>
+                  <td className="px-3 py-2 font-sans text-xs text-[var(--text-dim)]">—</td>
+                </tr>
+                <tr className="border-t border-[var(--border)]">
+                  <td className="px-3 py-2 font-sans">LLM parsing crawler (opzionale)</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2">15</td>
+                  <td className="text-right px-3 py-2">40</td>
+                  <td className="text-right px-3 py-2">80</td>
+                  <td className="px-3 py-2 font-sans text-xs text-[var(--text-dim)]">Haiku 4.5 per changelog enrichment</td>
+                </tr>
+                <tr className="border-t border-[var(--border)]">
+                  <td className="px-3 py-2 font-sans">Bandwidth OVH</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="px-3 py-2 font-sans text-xs text-[var(--text-dim)]">1 Gbps unmetered incluso</td>
+                </tr>
+                <tr className="border-t border-[var(--border)]">
+                  <td className="px-3 py-2 font-sans">Redis / ARC scaling</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="px-3 py-2 font-sans text-xs text-[var(--text-dim)]">64GB RAM basta fino a 2M call/giorno</td>
+                </tr>
+                <tr className="border-t border-[var(--border)]">
+                  <td className="px-3 py-2 font-sans">Cloudflare Pro (se serve CDN paid)</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2">20</td>
+                  <td className="px-3 py-2 font-sans text-xs text-[var(--text-dim)]">solo se &gt; 500k call/giorno</td>
+                </tr>
+                <tr className="border-t-2 border-[var(--accent)] bg-[var(--surface)]">
+                  <td className="px-3 py-2 font-sans font-semibold">Totale variabile €/mese</td>
+                  <td className="text-right px-3 py-2 font-semibold">0</td>
+                  <td className="text-right px-3 py-2 font-semibold">15</td>
+                  <td className="text-right px-3 py-2 font-semibold">40</td>
+                  <td className="text-right px-3 py-2 font-semibold">100</td>
+                  <td className="px-3 py-2 font-sans text-xs text-[var(--text-dim)]">—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3 className="text-sm font-medium mb-2 text-[var(--text-dim)]">Proiezione 18 mesi — investimento totale</h3>
+          <div className="overflow-x-auto border border-[var(--border)] rounded mb-4">
+            <table className="w-full text-sm">
+              <thead className="bg-[var(--surface)] text-[11px] uppercase tracking-wider text-[var(--text-dim)]">
+                <tr>
+                  <th className="text-left px-3 py-2">Periodo</th>
+                  <th className="text-right px-3 py-2">Fisso (IVA incl)</th>
+                  <th className="text-right px-3 py-2">Variabile</th>
+                  <th className="text-right px-3 py-2">One-time</th>
+                  <th className="text-right px-3 py-2">Totale periodo</th>
+                </tr>
+              </thead>
+              <tbody className="font-mono tabular-nums text-[var(--text)]">
+                <tr className="border-t border-[var(--border)]">
+                  <td className="px-3 py-2 font-sans">Mese 1-6</td>
+                  <td className="text-right px-3 py-2">799</td>
+                  <td className="text-right px-3 py-2">45</td>
+                  <td className="text-right px-3 py-2">900 <span className="text-[var(--text-dim)] text-xs font-sans">(trademark)</span></td>
+                  <td className="text-right px-3 py-2 font-semibold">1.744</td>
+                </tr>
+                <tr className="border-t border-[var(--border)]">
+                  <td className="px-3 py-2 font-sans">Mese 7-12</td>
+                  <td className="text-right px-3 py-2">799</td>
+                  <td className="text-right px-3 py-2">165</td>
+                  <td className="text-right px-3 py-2">0</td>
+                  <td className="text-right px-3 py-2 font-semibold">964</td>
+                </tr>
+                <tr className="border-t border-[var(--border)]">
+                  <td className="px-3 py-2 font-sans">Mese 13-18</td>
+                  <td className="text-right px-3 py-2">799</td>
+                  <td className="text-right px-3 py-2">450</td>
+                  <td className="text-right px-3 py-2">1.500 <span className="text-[var(--text-dim)] text-xs font-sans">(advisor M&A)</span></td>
+                  <td className="text-right px-3 py-2 font-semibold">2.749</td>
+                </tr>
+                <tr className="border-t-2 border-[var(--accent)] bg-[var(--surface)]">
+                  <td className="px-3 py-2 font-sans font-semibold">Totale 18 mesi</td>
+                  <td className="text-right px-3 py-2 font-semibold">2.397</td>
+                  <td className="text-right px-3 py-2 font-semibold">660</td>
+                  <td className="text-right px-3 py-2 font-semibold">2.400</td>
+                  <td className="text-right px-3 py-2 font-semibold text-[var(--accent)]">5.457 €</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded p-4 mb-4">
+            <p className="text-sm text-[var(--text)] leading-relaxed">
+              <strong>Cash out totale stimato in 18 mesi: ~5.500 €</strong> (hardware allocato 100% a DepScope).
+              Se exit conservativa <strong>1 M€</strong> → ROI <strong>182x</strong>. Se exit 5 M€ → ROI 909x.
+              Se exit non avviene, cash totale bruciato resta comunque 5.500 € (costo sostenibile da Cuttalo senza impatto).
+            </p>
+          </div>
+
+          <h3 className="text-sm font-medium mb-2 text-[var(--text-dim)]">Economia marginale (cost per call)</h3>
+          <ul className="space-y-1 text-xs text-[var(--text-dim)] font-mono">
+            <li>• A 11k call/giorno → <strong className="text-[var(--text)]">0,0004 €/call</strong> (costo fisso diluito)</li>
+            <li>• A 200k call/giorno → <strong className="text-[var(--text)]">0,000022 €/call</strong></li>
+            <li>• A 500k call/giorno → <strong className="text-[var(--text)]">0,000015 €/call</strong></li>
+            <li>• Gross margin a qualsiasi scala: 99%+ (infra fissa, bandwidth gratis, compute minimo)</li>
+          </ul>
+
+          <p className="text-xs text-[var(--text-faded)] mt-4 leading-relaxed">
+            Nota su allocazione: il server ospita anche CT 141 (cuttalo-stage) e CT 142 (mystampo).
+            In realtà DepScope occupa ~60% delle risorse. Costo strettamente allocato a DepScope sarebbe ~70 €/mese.
+            Per sicurezza DD usiamo l&apos;intero costo server. Se in DD si mostra che il server è condiviso,
+            l&apos;acquirer potrebbe scontare la separazione infrastrutturale: motivo in più per avere stack pulito.
           </p>
         </section>
 
-        {/* Unit economics */}
+        {/* Roadmap acquisition-focused */}
         <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-3">Unit economics (stima conservativa)</h2>
-          <ul className="space-y-2 text-sm text-[var(--text)]">
-            <li>• <strong>Costo infra</strong>: VM 140 self-hosted su Proxmox esistente = ~0 € marginale. Scaling a 100k utenti/mese richiederebbe upgrade a 8GB RAM (~+15€/mese OVH)</li>
-            <li>• <strong>Dominio</strong>: 10,49 €/anno OVH</li>
-            <li>• <strong>Email transazionale</strong>: Postfix su VM 130 proprio = 0 €</li>
-            <li>• <strong>Stripe fee</strong>: 1,5% + 0,25 € per transazione EU</li>
-            <li>• <strong>Crawler AI budget</strong>: 10-50 €/mese di OpenAI/Anthropic se si usa LLM per parsing changelog (opzionale; regex-based è gratis)</li>
-            <li>• <strong>Marketing</strong>: 0 € (canale organico: HN, dev.to, Reddit, LinkedIn)</li>
-            <li>• <strong>Team</strong>: 1 fondatore (costo opportunità 60-100k €/anno di lavoro full-time non conteggiato qui)</li>
-            <li>• <strong>Gross margin</strong>: ~95%+ su ogni € di revenue (costi infra sono fissi e bassi)</li>
-          </ul>
-        </section>
-
-        {/* Roadmap */}
-        <section className="mb-10">
-          <h2 className="text-lg font-semibold mb-3">Roadmap 12 mesi — milestone</h2>
+          <h2 className="text-lg font-semibold mb-3">Roadmap 18 mesi — milestone acquisition</h2>
           <ol className="space-y-3 text-sm text-[var(--text)]">
-            <li><strong>Q2 2026 (Apr-Giu)</strong>: chiudere le 20 action items sotto. Pubblicare MCP npm, primo commit GitHub, Smithery, HN relaunch, pagine SSR dettaglio. Obiettivo: 1k utenti unici/mese.</li>
-            <li><strong>Q3 2026 (Lug-Set)</strong>: attivare Stripe, primo paying customer, 3 enterprise pilot in chiusura. Scale dati verticali a 1.000+ entry. Obiettivo: 500 € MRR.</li>
-            <li><strong>Q4 2026 (Ott-Dic)</strong>: SDK Python/Node published, primo enterprise paying, case studies. Pipeline crawler automatica su 5K package. Obiettivo: 3k € MRR.</li>
-            <li><strong>Q1 2027 (Gen-Mar)</strong>: espansione verticali adiacenti (Docker images, Helm charts). Team hire: 1 dev part-time. Obiettivo: 8k € MRR.</li>
+            <li><strong>Mesi 1-2 (Apr-Mag 2026)</strong>: EXIT-1, EXIT-3 (thesis + IP audit). DIST-1..4 (publishing).
+              FE-1 (SSR pages). <em>Target</em>: repo pubblico, MCP live su 3 registry, 500 pagine indicizzate.</li>
+            <li><strong>Mesi 3-4 (Giu-Lug)</strong>: DATA-4, DATA-5 (signal unici). DIST-5 (VS Code ext). GROW-1 (HN relaunch).
+              <em>Target</em>: 2 signal proprietari live, 1k install cumulative, 1 thread HN front-page.</li>
+            <li><strong>Mesi 5-6 (Ago-Set)</strong>: DATA-1 (8 ecosistemi vuoti), DATA-2 (crawler auto). DIST-6 (GitHub Action). REL-1..2.
+              <em>Target</em>: 100k pacchetti, CI/CD pulita, 500 repo che usano l&apos;action.</li>
+            <li><strong>Mesi 7-9 (Ott-Dic)</strong>: GROW-2 (50 founder outreach), GROW-5 (citation mining), EXIT-4 (public stats).
+              <em>Target</em>: 3-5 integrazioni comunitarie, menzioni in dev blogs, presenza su Claude/ChatGPT answers.</li>
+            <li><strong>Mesi 10-12 (Gen-Mar 2027)</strong>: EXIT-5 (primo warm intro), EXIT-2 log continuo, DATA-6 (agent trend report).
+              <em>Target</em>: 1-3 conversazioni quiet con compratori, 10k+ agenti/mese che ci usano.</li>
+            <li><strong>Mesi 13-18 (Apr-Set 2027)</strong>: conversazioni multiple in parallelo. Advisor / broker M&A se necessario.
+              <em>Target</em>: LOI da 1-3 acquirer, chiusura deal €1M-10M.</li>
           </ol>
         </section>
 
@@ -617,24 +1085,28 @@ export default function AdminPlanPage() {
           <h2 className="text-lg font-semibold mb-3">Rischi identificati</h2>
           <div className="space-y-3 text-sm text-[var(--text)]">
             <div>
-              <strong className="text-[var(--red)]">R1 — Commoditizzazione (alto)</strong>
-              <p className="mt-1 text-[var(--text-dim)]">Anthropic/Google integrano intelligence simile nativamente nei loro agent. Mitigazione: depth su dati + neutralità cross-agent + enterprise self-hosted con SLA.</p>
+              <strong className="text-[var(--red)]">R1 — Commoditizzazione nativa (alto)</strong>
+              <p className="mt-1 text-[var(--text-dim)]">Anthropic/Google/GitHub integrano intelligence simile nei loro agent. Mitigazione: dataset uniqueness + speed, moat cross-ecosystem, diventare partner prima di concorrente.</p>
             </div>
             <div>
-              <strong className="text-[var(--yellow)]">R2 — Founder time (medio-alto)</strong>
-              <p className="mt-1 text-[var(--text-dim)]">1 persona non basta oltre a 5-10k € MRR. Serve 2º fondatore tecnico o primo hire. Rischio burnout.</p>
+              <strong className="text-[var(--red)]">R2 — Nessun segnale buyer in 18 mesi (alto)</strong>
+              <p className="mt-1 text-[var(--text-dim)]">Scenario reale: 75% delle exit tentate falliscono. Mitigazione: accettare l&apos;asimmetria (upside enorme, downside limitato al tempo speso), avere piano B di mantenimento a costo zero se exit non arriva.</p>
             </div>
             <div>
-              <strong className="text-[var(--yellow)]">R3 — Dati stale (medio)</strong>
-              <p className="mt-1 text-[var(--text-dim)]">Senza crawler automatica, i 79 breaking changes diventano obsoleti in 6-12 mesi. Action DATA-2 è critica.</p>
+              <strong className="text-[var(--yellow)]">R3 — Founder time (medio-alto)</strong>
+              <p className="mt-1 text-[var(--text-dim)]">1 persona + Cuttalo. Attenzione a non disperdere energia tra troppi progetti. Darsi scadenza trimestrale: se non progredisce, pausa su DepScope.</p>
             </div>
             <div>
-              <strong className="text-[var(--yellow)]">R4 — Pricing enterprise mal calibrato (medio)</strong>
-              <p className="mt-1 text-[var(--text-dim)]">3-8k €/mese è stima. Potrebbe essere 1k o 20k. Pilot con 3 aziende serve a validare, non a far fatturato subito.</p>
+              <strong className="text-[var(--yellow)]">R4 — Dati stale (medio)</strong>
+              <p className="mt-1 text-[var(--text-dim)]">Senza crawler automatica, breaking changes invecchiano in 6 mesi → moat sparisce. DATA-2 è critica per mantenere credibilità.</p>
             </div>
             <div>
-              <strong className="text-[var(--text-faded)]">R5 — Legali su dati curati (basso)</strong>
-              <p className="mt-1 text-[var(--text-dim)]">Se pubblichiamo fix errato che causa danno, potenziale liability. Aggiungere disclaimer + source URL visibile sempre. Già presente.</p>
+              <strong className="text-[var(--yellow)]">R5 — IP encumbrance (medio)</strong>
+              <p className="mt-1 text-[var(--text-dim)]">Se codebase ha GPL contamination o scraping senza ToS, la DD salta. EXIT-3 (audit) va fatto ora mentre è fattibile.</p>
+            </div>
+            <div>
+              <strong className="text-[var(--text-faded)]">R6 — Liability su dati curati (basso)</strong>
+              <p className="mt-1 text-[var(--text-dim)]">Fix errato che causa danno. Disclaimer + source URL sempre visibili. Già presente.</p>
             </div>
           </div>
         </section>
@@ -643,7 +1115,7 @@ export default function AdminPlanPage() {
         <section className="mb-10">
           <div className="flex items-end justify-between mb-3">
             <div>
-              <h2 className="text-lg font-semibold">Action items — lista eseguibile</h2>
+              <h2 className="text-lg font-semibold">Action items — backlog acquisition-driven</h2>
               <p className="text-xs text-[var(--text-dim)] mt-1">
                 {todoCount} da fare · {doingCount} in corso · {doneCount} fatte. Lo stato si salva nel browser.
               </p>
@@ -736,24 +1208,27 @@ export default function AdminPlanPage() {
           </div>
         </section>
 
-        {/* Next moves */}
+        {/* Prossime mosse */}
         <section className="mb-10 bg-[var(--surface)] border border-[var(--border)] rounded p-5">
-          <h2 className="text-lg font-semibold mb-2">La mia raccomandazione onesta — ordine temporale</h2>
+          <h2 className="text-lg font-semibold mb-2">Prossime mosse — ordine temporale</h2>
           <ol className="list-decimal list-inside space-y-2 text-sm text-[var(--text)]">
-            <li><strong>Questa settimana</strong>: DIST-1, DIST-2, DIST-3, DIST-4 (tutte &lt; 2h ciascuna). Sblocca la distribuzione.</li>
-            <li><strong>Prossime 2 settimane</strong>: FE-1 (pagine SSR dettaglio) + DX-1 (api-docs updated). Queste + la distribuzione = prime 1k utenti unici al mese.</li>
-            <li><strong>Mese 1</strong>: MON-1 (Stripe attivato). Senza paywall funzionante, nessuno vi crederà "prodotto".</li>
-            <li><strong>Mese 2</strong>: MON-3 (3 enterprise pilot). Valida prezzo reale + genera case study.</li>
-            <li><strong>Mese 3</strong>: DATA-2 + DATA-3 (pipeline crawler). Senza dati freschi, il moat dura 6 mesi al massimo.</li>
-            <li><strong>Mese 4+</strong>: REL-1, REL-2, DX-2 (igiene professionale che paga lungo termine).</li>
+            <li><strong>Questa settimana</strong>: EXIT-1 (thesis scritto), EXIT-3 (IP audit), DIST-1..4 (MCP publish + GitHub push + Smithery). Sblocca visibility.</li>
+            <li><strong>2 settimane</strong>: FE-1 (SSR pages) + DX-1 (api-docs). Long-tail SEO + vetrina DX.</li>
+            <li><strong>Mese 1</strong>: DATA-4 + DATA-5 (typosquat cross + maintainer trust). I due signal che nessuno ha.</li>
+            <li><strong>Mese 2</strong>: DIST-5 (VS Code), DIST-6 (GitHub Action). I due wedge di distribuzione.</li>
+            <li><strong>Mese 3</strong>: GROW-1 (HN relaunch sincronizzato con tutto il sopra). Primo vero momento di visibility globale.</li>
+            <li><strong>Mese 4-6</strong>: DATA-1 (8 ecosistemi vuoti) + DATA-2 (crawler auto). Il moat diventa irreplicabile.</li>
+            <li><strong>Mese 7-12</strong>: GROW-2 outreach, EXIT-5 primi intro warm, DATA-6 agent trend report. Si prepara la conversazione di exit.</li>
+            <li><strong>Mese 13+</strong>: conversazioni attive con 3-5 compratori, advisor M&A se necessario.</li>
           </ol>
           <p className="text-xs text-[var(--text-faded)] mt-4 leading-relaxed">
-            Zero azione su DATA-1 (8 ecosistemi vuoti) fino a mese 3: non vale lo sforzo finché non hai traction sulla coppia eco già servite. Copertura perfetta prima di product-market fit è over-engineering.
+            Regola: ogni item che non è in EXIT / DATA / DIST / GROW è secondario. REL e DX servono alla DD, non al prodotto.
+            Se in 18 mesi non c&apos;è segnale buyer → si valuta pausa a costo zero, non pivot a SaaS.
           </p>
         </section>
 
         <footer className="pt-6 border-t border-[var(--border)] text-xs text-[var(--text-faded)]">
-          Metrica aggiornata in tempo reale dal DB. Stato azioni salvato in localStorage.
+          Bussola acquisition-only. Metrica aggiornata in tempo reale dal DB. Stato azioni salvato in localStorage.
           Pagina solo admin — non indicizzata, non accessibile senza API key amministrativa.
         </footer>
       </main>

@@ -14,7 +14,7 @@ const SNIPPETS: Snippet[] = [
   {
     id: "mcp",
     title: "MCP server (Claude Code / Desktop / Cursor)",
-    blurb: "Install via npm. 29 tools for package intelligence (incl. ai_brief, audit_stack, get_migration_path), zero config.",
+    blurb: "Install via npm. 22 consolidated tools for package intelligence (incl. get_package_prompt, scan_project, get_migration_path), zero config.",
     lang: "sh",
     code: `# Claude Code (one-liner — local stdio)
 claude mcp add depscope -- npx -y depscope-mcp
@@ -27,9 +27,9 @@ claude mcp add depscope -- npx -y depscope-mcp
   }
 }
 
-# 23 tools available. Most-used for AI agents:
-#   ai_brief         — 300-token package verdict
-#   audit_stack      — one-call audit for N packages
+# 22 consolidated tools available. Most-used for AI agents:
+#   get_package_prompt — 300-token package verdict (token-saver)
+#   scan_project       — one-call audit for N packages (any ecosystem)
 #   get_migration_path — code diff to migrate deprecated → modern`,
   },
   {
@@ -212,7 +212,7 @@ export default function IntegratePage() {
                   <div className="text-xs uppercase tracking-wider text-[var(--text-faded)]">Install in 1 click</div>
                   <div className="text-sm text-[var(--text-dim)] mt-1">No JSON to edit. Click the button for your IDE.</div>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/30">29 tools · zero auth</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-[var(--accent)]/10 text-[var(--accent)] border border-[var(--accent)]/30">22 tools · zero auth</span>
               </div>
               <div className="grid md:grid-cols-3 gap-3">
                 <a href="cursor://anysphere.cursor-deeplink/mcp/install?name=depscope&config=eyJ1cmwiOiJodHRwczovL21jcC5kZXBzY29wZS5kZXYvbWNwIn0="

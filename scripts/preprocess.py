@@ -132,7 +132,9 @@ async def process_package(ecosystem: str, name: str) -> dict | None:
         }
 
         # Cache in Redis with 24h TTL
-        await cache_set(f"check:{ecosystem}:{name}", result, ttl=86400)
+        # Cache removed: was bypassing /api/check full response path (missing alternatives).
+        # /api/check will generate its own cache with the full recommendation+alternatives.
+        pass
 
         # Save to PostgreSQL
         await save_package_to_db(pkg, health["score"], vulns)

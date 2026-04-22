@@ -1,3 +1,4 @@
+import os
 #!/usr/bin/env python3
 """DepScope Marketing Agent — Full Agentic Marketing System.
 
@@ -35,7 +36,7 @@ import asyncpg
 SMTP_USER = "depscope@cuttalo.com"
 SMTP_PASS = os.environ.get("SMTP_PASS", "")
 
-DB_URL = os.getenv("DATABASE_URL", "postgresql://depscope:${DB_PASSWORD}@localhost:5432/depscope")
+DB_URL = os.getenv("DATABASE_URL", os.environ.get("DATABASE_URL", "postgresql://depscope:CHANGEME@localhost:5432/depscope"))
 
 # ── Discovery config ──
 DEVTO_API = "https://dev.to/api"

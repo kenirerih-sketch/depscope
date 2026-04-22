@@ -1,214 +1,324 @@
 ---
 name: DepScope Platform
-description: depscope.dev — Package Intelligence for AI Agents. VM 140, FastAPI+Next.js 16+PostgreSQL 17. API free, 17 ecosistemi (npm/pypi/cargo/go/maven/nuget/rubygems+10 altri), 14,700+ pacchetti, 402 vulnerabilita, 20 MCP tools, 3 verticali (package health + error->fix + compat matrix). Save tokens, save energy, ship safer code.
+description: depscope.dev — Package Intelligence for AI Agents. CT 140 on Proxmox 9 (OVH RISE-M). FastAPI + Next.js + PostgreSQL 17. 17 ecosystems, 31k+ packages indexed, 2.2k+ vulnerabilities, 595 curated alternatives, MCP with 29 tools. Free, no-auth public API. Stage mirror at stage.depscope.dev.
 type: project
-originSessionId: 21209a7e-7e4e-46e5-aa87-f1f2b0a39c02
----
-## DepScope — Package Intelligence for AI Agents
-
-**Concetto**: Facciamo il lavoro sporco UNA volta (aggregare registry + vulnerability data), e serviamo il risultato a milioni di agenti AI in millisecondi. Il valore è nei dati accumulati.
-
-**URL**: https://depscope.dev
-**Azienda**: Cuttalo srl, Via Paritaro 81, 74023 Grottaglie (TA), P.IVA IT03242390734
-
 ---
 
-### INFRASTRUTTURA
+# DepScope — AI Assistant Operating Manual
 
-**VM 140** — web-depscope
-- IP: 10.10.0.140
-- CPU: 2 core, RAM: 4GB (NOTA: serve stop+start da Proxmox per applicare, reboot non basta)
-- Disco: 15GB (5.7GB usati)
-- OS: Debian 13
+> Target audience: Claude / Cursor / Windsurf sessions working on this repo.
+> Tone: concrete paths, copy-pasteable commands, no fluff.
+> Date of last refresh: **2026-04-21**.
 
-**Stack**:
-- Backend: FastAPI (Python 3.13) su porta 8000
-- Frontend: Next.js 16 su porta 3000
-- DB: PostgreSQL 17 (user depscope/${DB_PASSWORD})
-- Cache: Redis
-- Reverse proxy: Nginx (locale) → HAProxy (Proxmox :80)
-- Process manager: PM2 (depscope-api + depscope-web)
-- Venv Python: /home/deploy/depscope/.venv/
+Current scale (stage DB snapshot):
 
-**Routing**: Client → Cloudflare → HAProxy (:80) → VM 140 Nginx (:80) → FastAPI (:8000) o Next.js (:3000)
-
-**Dominio**: depscope.dev (OVH, ordine #248666504, 10.49€/anno)
-**Cloudflare Zone**: 664e55136e4ac133233903ca1165b0ad (SSL flexible)
-**DNS**: A record depscope.dev → 91.134.4.25 (proxied)
+| Metric | Value |
+|--------|------:|
+| Ecosystems | 17 |
+| Packages indexed | 31.054 |
+| Vulnerabilities tracked | 2.282 (327 critical / 802 high / 708 medium / 108 low / 337 unknown) |
+| Curated alternatives | 595 |
+| Average health score | 60 |
+| MCP tools | 29 (consolidation to ~15-18 planned — NOT applied yet) |
+| Scheduled cron jobs | 36 |
 
 ---
 
-### FILE STRUTTURA
+## 1. Quick start
 
-```
-/home/deploy/depscope/
-├── api/                    # Backend FastAPI
-│   ├── main.py            # App principale, tutti gli endpoint
-│   ├── config.py          # Configurazione
-│   ├── database.py        # Pool PostgreSQL (asyncpg)
-│   ├── cache.py           # Redis cache + rate limiting
-│   ├── registries.py      # Fetch da 17 registries (npm/pypi/cargo/go/maven/nuget/rubygems+10 altri) + OSV vulns
-│   ├── health.py          # Calcolo health score algoritmico
-│   ├── auth.py            # Magic link auth
-│   └── payments.py        # Stripe (predisposto, non attivo)
-├── config/                 # Credenziali (chmod 600)
-│   ├── stripe.json        # Stripe test keys (Cuttalo srl)
-│   └── fic.json           # Fatture in Cloud (Cuttalo srl)
-├── scripts/
-│   ├── preprocess.py      # Pre-cache top 250+ pacchetti (cron 6h)
-│   ├── alerts.py          # Monitoring anomalie (cron 15min)
-│   ├── daily_report.py    # Report email giornaliero (cron 8:00)
-│   └── seed_popular.py    # Seed iniziale (vecchio, usa preprocess)
-├── frontend/               # Next.js 16
-│   ├── app/
-│   │   ├── page.tsx       # Homepage con search
-│   │   ├── layout.tsx     # Layout + JSON-LD + cookie banner
-│   │   ├── admin/         # Dashboard admin (auth API key)
-│   │   ├── api-docs/      # Documentazione API
-│   │   ├── stats/         # Stats pubbliche (numeri nascosti sotto 10K)
-│   │   ├── contact/       # Contatto + dati Cuttalo srl
-│   │   ├── privacy/       # Privacy policy GDPR
-│   │   ├── popular/       # Top pacchetti SSR
-│   │   ├── ecosystems/    # Hub per ecosistema SSR
-│   │   ├── compare/       # Compare packages SSR
-│   │   ├── pkg/           # Pagine individuali pacchetto SSR (273+)
-│   │   └── sitemap.ts     # Sitemap dinamica (292 URL)
-│   └── public/
-│       ├── robots.txt     # Permissivo per AI crawler
-│       └── llms.txt       # AI agent discovery file
-├── mcp-server/             # MCP Server (pubblicato su npm)
-│   ├── index.js
-│   ├── package.json
-│   └── smithery.yaml
-├── ecosystem.config.js     # PM2 config
-└── run.py                  # Entry point API
+### 1.1 Connect to CT 140
+
+```bash
+# From the admin laptop (Windows, Git Bash)
+node ~/ssh-new.js "pct exec 140 -- bash -c 'whoami && hostname'"
+
+# Interactive shell inside the container
+ssh root@91.134.4.25 "pct enter 140"
+
+# Push a local file to CT 140
+MSYS_NO_PATHCONV=1 node C:/Users/Vincenzo/push-new.js 140 <local> <remote>
+
+# Fetch a file from CT 140
+MSYS_NO_PATHCONV=1 node C:/Users/Vincenzo/fetch-new.js 140 <remote> <local>
 ```
 
----
+### 1.2 Environments
 
-### API ENDPOINTS (tutti free, no auth, 200 req/min)
+| Env | Dir | API | MCP | Web | DB | Admin key |
+|-----|-----|-----|-----|-----|----|-----------|
+| **prod** | `/home/deploy/depscope/` | :8000 | :8001 | :3000 | `depscope` | `ds_admin_<prod>` |
+| **stage** | `/home/deploy/depscope-stage/` | :8100 | :8101 | :3100 | `depscope_stage` | `ds_admin_stage_<hash>` |
 
-| Endpoint | Metodo | Scopo |
-|----------|--------|-------|
-| `/api/check/{eco}/{pkg}` | GET | Check completo: health, vulns, recommendation |
-| `/api/latest/{eco}/{pkg}` | GET | Solo versione latest (velocissimo) |
-| `/api/exists/{eco}/{pkg}` | GET | Esiste sì/no |
-| `/api/health/{eco}/{pkg}` | GET | Solo health score 0-100 |
-| `/api/vulns/{eco}/{pkg}` | GET | Vulnerabilità (filtrate a latest version) |
-| `/api/versions/{eco}/{pkg}` | GET | Lista versioni |
-| `/api/compare/{eco}/{a},{b},{c}` | GET | Compara 2-10 pacchetti |
-| `/api/scan` | POST | Audit intero progetto (max 100 pkg) |
-| `/api/search/{eco}?q=...` | GET | Cerca pacchetti per keyword |
-| `/api/alternatives/{eco}/{pkg}` | GET | Alternative a deprecati |
-| `/api/now` | GET | Data/ora UTC corrente |
-| `/api/prompt/{eco}/{pkg}` | GET | LLM-optimized plain text (~74% token reduction) |
-| `/api/trending` | GET | Pacchetti trending pubblici |
-| `/api/history/{eco}/{pkg}` | GET | Health history 90 giorni (Level 2) |
-| `/api/tree/{eco}/{pkg}` | GET | Dependency tree con health (Level 2) |
-| `/api/bundle/{eco}/{pkg}` | GET | Bundle size min+gzip (Level 2) |
-| `/api/types/{eco}/{pkg}` | GET | TypeScript quality (Level 2) |
-| `/api/licenses/{eco}/{pkg}` | GET | License audit (Level 2) |
-| `/api/error?code=X` | GET | Error -> Fix DB lookup (Vertical 2) |
-| `/api/error/resolve` | POST | Resolve stack trace -> fix verificato (Vertical 2) |
-| `/api/compat?packages=...` | GET | Stack compatibility matrix (Vertical 3) |
-| `/api/bugs/{eco}/{pkg}` | GET | Known bugs per versione, non-CVE (Vertical 4) |
-| `/api/stats` | GET | Stats pubbliche (numeri nascosti sotto 10K) |
-| `/api/sitemap-packages` | GET | Lista pacchetti per sitemap |
-| `/api/admin/dashboard` | GET | Dashboard admin (auth required) |
-| `/api/admin/stats` | GET | Stats complete admin (auth required) |
-| `/.well-known/ai-plugin.json` | GET | ChatGPT plugin discovery |
-| `/openapi-gpt.json` | GET | OpenAPI pulito per GPT Actions (8 endpoint) |
-| `/badge/{eco}/{pkg}` | GET | Health score badge SVG (per README/docs) |
-| `/badge/score/{eco}/{pkg}` | GET | Score-only badge SVG (compatto) |
+Stage is exposed at `https://stage.depscope.dev` behind **HTTP basic auth**. Prod is `https://depscope.dev`.
 
-**Ecosistemi** (17): npm, pypi, cargo, go, composer, maven, nuget, rubygems, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew
+### 1.3 PM2
 
----
+```bash
+sudo -u deploy pm2 list
+# Prod:  depscope-api, depscope-mcp-http, depscope-web
+# Stage: depscope-api-stage, depscope-mcp-stage, depscope-web-stage
 
-### HEALTH SCORE (algoritmico, 0-100)
+sudo -u deploy pm2 restart depscope-api-stage
+sudo -u deploy pm2 logs depscope-api-stage --lines 100
+```
 
-| Segnale | Max | Fonte |
-|---------|-----|-------|
-| Maintenance | 25 | Giorni dall'ultimo release |
-| Security | 25 | CVE da OSV (filtrate a latest) |
-| Popularity | 20 | Download settimanali |
-| Maturity | 15 | Numero versioni totali |
-| Community | 15 | Numero maintainer |
+Stage PM2 config: `/home/deploy/depscope-stage/ecosystem.stage.config.js`.
+Prod PM2 config:  `/home/deploy/depscope/ecosystem.config.js`.
 
-**Recommendation actions** (priorità: critical > deprecated > high > low_health):
-- safe_to_use, update_required, use_with_caution, find_alternative, do_not_use
+### 1.4 Database
+
+```bash
+# Stage
+PGPASSWORD=$STAGE_DB_PASS psql -U depscope_stage -h localhost -d depscope_stage
+
+# Prod
+PGPASSWORD=$PROD_DB_PASS psql -U depscope -h localhost -d depscope
+
+# Useful queries
+\dt                                                    -- list tables
+select count(*) from packages;
+select severity, count(*) from vulnerabilities group by 1;
+select ecosystem, count(*) from packages group by 1 order by 2 desc;
+```
+
+Connection strings live in the cron env block (`sudo -u deploy crontab -l`) and in `ecosystem*.config.js`.
 
 ---
 
-### CREDENZIALI & AUTH
+## 2. Architecture
 
-**Database**: postgresql://depscope:REDACTED@localhost:5432/depscope
-**Redis**: redis://localhost:6379/0
-**Email**: depscope@cuttalo.com / REDACTED_SEE_MEMORY
-**Admin API Key**: REDACTED_SEE_MEMORY
-**Auth system**: LIVE — magic link login + API keys user-scoped (ds_live_xxx / ds_test_xxx) per higher limits e usage analytics. Pubblico resta free e no-auth.
-**Admin Dashboard**: https://depscope.dev/admin
-**npm Token**: REDACTED_SEE_MEMORY
-**npm Username**: depscope (email: arch.vincenzo.rubino@gmail.com)
-**Stripe**: test mode, config in /home/deploy/depscope/config/stripe.json
-**FIC**: Cuttalo srl, config in /home/deploy/depscope/config/fic.json
-**Roundcube**: depscope@cuttalo.com accessibile da posta.cuttalo.com (identity #18 di admin)
+```
+Client → Cloudflare → HAProxy (host, :80) → CT 140 Nginx (:80)
+                                             ├─ /api/*     → FastAPI  (prod :8000 / stage :8100)
+                                             ├─ /mcp       → MCP HTTP (prod :8001 / stage :8101)
+                                             ├─ /badge/*   → FastAPI
+                                             └─ *          → Next.js  (prod :3000 / stage :3100)
+```
 
----
-
-### CRON JOBS (crontab di deploy@10.10.0.140)
-
-| Schedule | Script | Cosa fa |
-|----------|--------|---------|
-| Ogni 6h | preprocess.py | Pre-cache top 250+ pacchetti in Redis + PostgreSQL |
-| Ogni 15min | alerts.py | Controlla API/DB/disk/RAM/PM2, email se anomalie |
-| 6:00 UTC (8:00 Roma) | daily_report.py | Report giornaliero email con KPI |
-
-**Alert email a**: vincenzo@cuttalo.com + arch.vincenzo.rubino@gmail.com
-**Report email a**: stessi destinatari
+- **Host**: `91.134.4.25` — OVH RISE-M, Proxmox 9.1 (installed 2026-04-21).
+- **CT 140** IP: `10.10.0.140`. LXC container, Debian 13, Python 3.13, Node 20.
+- **HAProxy** on host splits `depscope.dev` and `stage.depscope.dev` to the same CT, different ports.
+- **Stage is isolated**: separate DB, separate Redis DB index (`/1`), SMTP sinkholed to `127.0.0.1:9999` so nothing can email out.
 
 ---
 
-### DISTRIBUZIONE & MARKETING
+## 3. Data pipeline
 
-| Canale | URL/Stato |
-|--------|-----------|
-| Website | https://depscope.dev (292 URL indicizzabili) |
-| GPT Store | "DepScope" — LIVE, chiama API reali |
-| npm | https://www.npmjs.com/package/depscope-mcp |
-| RapidAPI | Pubblicato |
-| GitHub main | https://github.com/cuttalo/depscope |
-| GitHub MCP | https://github.com/cuttalo/depscope |
-| Show HN | Pubblicato |
-| Dev.to | Articolo pubblicato |
-| Reddit | u/Depscope (account nuovo, karma da accumulare) |
-| PR awesome-mcp-servers | #4920 in attesa |
-| PR public-apis | #5879 in attesa |
-| GSC | Connesso, sitemap inviata |
-| mcp.so / smithery.ai | Da submittere (repo GitHub pronto) |
+### 3.1 Ingestion (how packages enter)
+
+1. **Seed** — `scripts/seed_popular.py`, `seed_ecosystems.py`, `seed_minor_ecosystems.py` pull top-N lists per ecosystem.
+2. **Expand** — `scripts/expand_db.py`, `mass_populate.py`, `catalog_expand_*.py` walk each registry.
+3. **Registry fetch** — `api/registries.py` (1867 LOC) is the dispatcher: one function per registry (`npm`, `pypi`, `cargo`, `go`, `composer`, `maven`, `nuget`, `rubygems`, `pub`, `hex`, `swift`, `cocoapods`, `cpan`, `hackage`, `cran`, `conda`, `homebrew`).
+
+### 3.2 Enrichment
+
+| Signal | Script | Source |
+|--------|--------|--------|
+| Vulnerabilities | `osv_backfill.py` | OSV.dev |
+| Swift vulns | `swift_backfill.py` | OSV via GitHub repo mapping |
+| NuGet downloads | `nuget_downloads_backfill.py` | Azure NuGet search |
+| Hackage downloads | `hackage_downloads_backfill.py` | Hackage top ranking |
+| Hackage first published | `hackage_first_published.py` | Hackage |
+| CPAN downloads | `cpan_popcon_backfill.py` | Debian popcon |
+| CPAN metadata | `cpan_metadata_backfill.py` | MetaCPAN |
+| CocoaPods dates | `cocoapods_dates_backfill.py` | CocoaPods specs |
+| Homebrew dates | `homebrew_dates_backfill.py` | GitHub commits |
+| Maven metadata | `maven_metadata_backfill.py` | Maven Central |
+| CRAN metadata | `cran_metadata_backfill.py` | CRAN |
+| Swift stars | `swift_stars_backfill.py` | GitHub stars |
+| KEV + EPSS | `ingest_kev_epss.py` | CISA KEV + FIRST EPSS |
+| Malicious/Scorecard | `ingest_malicious_scorecard.py` | OpenSSF |
+| Alternatives | `alternatives_curated_seed.py` | curated (idempotent) |
+| GitHub stats | `fetch_github_stats.py` | GitHub API |
+| Typosquats | `compute_typosquats.py` | internal |
+| Maintainer signals | `compute_maintainer_signals.py` | internal |
+| Severity re-derive | `reseverity.py` | OSV CVSS → normalized bucket |
+
+### 3.3 Scoring
+
+`api/health.py` (algorithmic, 0-100, no LLM):
+
+| Signal | Max | Source |
+|--------|:---:|--------|
+| Maintenance | 25 | days since last release |
+| Security | 25 | CVEs filtered to latest version |
+| Popularity | 20 | weekly downloads |
+| Maturity | 15 | total version count |
+| Community | 15 | maintainers + stars |
+
+Daily recalc: `scripts/recalc_health_merged.py` (07:00 UTC, after backfills).
 
 ---
 
-### STRATEGIA
+## 4. Cron map (36 jobs)
 
-- **Tutto gratis** per accumulare dati e utenti
-- Stats pubbliche nascoste sotto 10.000 chiamate (threshold in api/main.py e frontend/app/stats)
-- Monetizzazione futura con Piano Plus quando c'è massa critica
-- Target primario: agenti AI (Claude Code, Cursor, ChatGPT, Windsurf)
-- Target secondario: dev che usano curl/script per verificare dipendenze
-- Il valore è nel database di pacchetti + alternative + health score accumulato nel tempo
+Full list: `sudo -u deploy crontab -l`. Key cadence:
+
+- **Every hour**: `disk_monitor` (watchdog).
+- **Every 4h**: marketing agent orchestrator.
+- **Every 6h**: `alerts.py`, `preprocess.py` (pre-cache top 250).
+- **Every 12h**: `fetch_github_stats.py`.
+- **Daily 02:00**: `expand_db.py`.
+- **Daily 03:00**: `record_health_snapshot.py`, `compute_maintainer_signals.py`.
+- **Daily 04:00**: `compute_intelligence.py`.
+- **Daily 05:00**: `indexnow_submit`, **05:30** `ingest_kev_epss.py`.
+- **Daily 06:00**: `daily_report.py`, `ingest_malicious_scorecard.py`, `fetch_downloads.py` (+18:00).
+- **Daily 07:00**: `recalc_health_merged.py` (pulls fresh data into `health_score`).
+- **Daily 08:00**: `selftest.py` — emails on failure.
+- **Daily 10:00**: followup campaign. **11:00**: GSC pull.
+- **Weekly Sun 02:00**: `osv_backfill.py`. **02:30**: `swift_backfill.py`. **05:00**: `nuget_downloads_backfill.py`. **05:30**: `hackage_downloads_backfill.py`. **06:00**: `swift_stars_backfill.py`. **06:30**: `hackage_first_published.py`. **06:45**: `alternatives_curated_seed.py`. **04:00**: `scripts/backup_db.sh`. **04:30**: local pg_dump weekly snapshot. **10:00 Mon**: weekly report. **Mon 04:00**: typosquats.
+- **Monthly 1st**: `cocoapods_dates_backfill.py` (03:00), `homebrew_dates_backfill.py` (03:15), `maven_metadata_backfill.py` (03:30), `cran_metadata_backfill.py` (03:45), `cpan_metadata_backfill.py` (04:00), popcon refresh + `cpan_popcon_backfill.py` (04:15), `mass_populate` (02:00).
+
+Logs: `/var/log/depscope/*.log` (prod) — stage cron does not exist, scripts run on prod only.
 
 ---
 
-### NOTE OPERATIVE
+## 5. Development workflow
 
-- **PM2 startup**: configurato, ma dopo stop+start VM serve `pm2 start ecosystem.config.js`
-- **RAM 4GB**: il template cloud-init non applica la RAM al reboot, serve `qm stop 140 && qm start 140`
-- **Next.js standalone**: dopo ogni build copiare `.next/static` in `.next/standalone/.next/static` + `public/`
-- **Nginx config**: /etc/nginx/sites-available/depscope (route per /api/, /badge/, /docs, /.well-known/, /openapi-gpt.json)
-- **HAProxy config**: /etc/haproxy/haproxy.cfg (host_depscope → backend web-depscope → 10.10.0.140:80)
-- **Redis flush**: `redis-cli FLUSHALL` per invalidare cache dopo modifiche al backend
-- **Alternatives curate: tabella **alternatives** (177 pair curate: 156 real + 21 builtin su npm/pypi/cargo) — dict legacy in main.py conservato come fallback, non piu letto
+**Stage first. Always.**
 
-**Why:** Il mercato degli agenti AI coding esplode. Chi fornisce "intelligence" sulle dipendenze come servizio gratuito accumula dati e posizione. Nessun competitor fa tutto insieme su 17 ecosistemi (package health + error->fix + compat matrix + 20 MCP tools). Posizionamento: save tokens, save energy, ship safer code.
-**How to apply:** Sempre lavorare su VM 140 via SSH deploy@10.10.0.140. Backend in api/, frontend in frontend/. Test con curl dopo ogni modifica.
+1. Pull latest stage code:
+   ```bash
+   cd /home/deploy/depscope-stage && git pull
+   ```
+2. Edit locally or directly in stage (`MSYS_NO_PATHCONV=1 node push-new.js 140 ...`).
+3. Restart the relevant stage process:
+   ```bash
+   sudo -u deploy pm2 restart depscope-api-stage
+   ```
+4. Smoke-test against `http://127.0.0.1:8100/api/...` or `https://stage.depscope.dev/...` (basic auth).
+5. Run `scripts/selftest.py` against stage.
+6. Promote: copy files to `/home/deploy/depscope/` (or `scripts/sync_prod_to_stage.sh` is the **reverse** direction, do not confuse). Then `pm2 restart depscope-api && pm2 restart depscope-web`.
+7. Full backup before any risky write: `scripts/full_backup.sh`.
+
+**Never run destructive DB writes on prod without a `full_backup.sh` snapshot first.**
+
+---
+
+## 6. Key files
+
+| Path | LOC | Purpose |
+|------|----:|---------|
+| `api/main.py` | 6046 | FastAPI app, every endpoint, rate-limit, tracking |
+| `api/registries.py` | 1867 | Per-ecosystem fetchers (17 registries) |
+| `api/health.py` | 209 | Health score math |
+| `api/verticals.py` | 718 | Error → fix DB, compat matrix, known bugs |
+| `api/verticals_v2.py` | 576 | Newer vertical endpoints |
+| `api/intelligence.py` | 556 | Quality / scorecard / maintainer trust |
+| `api/mcp_http.py` | 498 | MCP Streamable HTTP transport |
+| `api/auth.py` | 442 | Magic-link login + `ds_live_xxx` keys |
+| `api/email_templates.py` | 320 | Transactional HTML |
+| `api/payments.py` | 169 | Stripe scaffolding (inactive) |
+| `api/history.py` | 100 | 90-day health trend |
+| `api/cache.py` | 32 | Redis cache + rate limit |
+| `mcp-server/tools.js` | 859 | **29 MCP tools** declarations + handlers |
+| `mcp-server/http-server.js` | 104 | Remote MCP HTTP wrapper |
+| `mcp-server/index.js` | 21 | stdio entrypoint (npm `depscope-mcp`) |
+| `scripts/recalc_health_merged.py` | — | Daily health rebuild |
+| `scripts/selftest.py` | — | End-to-end smoke test |
+| `scripts/full_backup.sh` | — | pg_dump + tarball + restic to OVH S3 |
+| `scripts/sync_prod_to_stage.sh` | — | Refresh stage DB + code from prod |
+
+---
+
+## 7. API endpoints (current surface)
+
+### 7.1 Public (no auth, 200 req/min, all free)
+
+**Core package intel**: `/api/check/{eco}/{pkg}`, `/api/prompt/{eco}/{pkg}`, `/api/latest`, `/api/exists`, `/api/health`, `/api/versions`, `/api/search/{eco}`, `/api/alternatives`, `/api/compare/{eco}/{a,b,c}`, `/api/vulns`, `/api/typosquat`, `/api/malicious`, `/api/scorecard`, `/api/quality`, `/api/license`, `/api/licenses`, `/api/provenance`, `/api/maintainers`, `/api/history`, `/api/tree`.
+
+**Verticals**: `/api/error` (+ POST `/api/error/resolve`, `/api/error/popular`, `/api/error/{hash}`), `/api/bugs/{eco}/{pkg}` (+ `/api/bugs/popular`, `/api/bugs/search`), `/api/compat` (GET+POST), `/api/breaking` (+ `/api/breaking/{eco}/{pkg}`), `/api/migration/{eco}/{from}/{to}`.
+
+**AI helpers**: `/api/ai/brief/{eco}/{pkg}`, POST `/api/ai/stack`.
+
+**Batch / discovery**: POST `/api/scan`, `/api/trending` (see `main.py`), `/api/ecosystems`, `/api/stats`, `/api/savings`, `/api/sitemap-packages`, `/api/sitemap-quality-pages`.
+
+**Utility**: `/api/now`, `/api/health` (liveness), POST `/api/anomaly`, POST `/api/contact`, `/api/contact/types`, POST `/api/track`.
+
+**Badges**: `/badge/{eco}/{pkg}`, `/badge/{eco}/{pkg}/score`.
+
+**Discovery**: `/`, `/.well-known/security.txt`, `/.well-known/ai-plugin.json`, `/openapi-gpt.json`, `/docs` (Swagger).
+
+### 7.2 Admin (header `X-API-Key: $ADMIN_API_KEY`)
+
+`/api/admin/overview`, `/timeseries`, `/insights`, `/dashboard`, `/stats`, `/pageviews`, `/sources`, `/charts`, `/plan-metrics`, `/seo-health`, `/automation`.
+
+Marketing agent sub-tree: `/api/admin/agent/{rules,plan,actions,opportunities,opportunities/all,metrics,run,dashboard,platforms,timeline,emails,opportunities/{id}/article,config,config/{key},state}`.
+
+### 7.3 MCP (29 tools via stdio or remote HTTP)
+
+Listed in `mcp-server/tools.js`: `ai_brief`, `audit_stack`, `get_migration_path`, `check_package`, `get_health_score`, `get_vulnerabilities`, `get_latest_version`, `package_exists`, `get_package_prompt`, `compare_packages`, `scan_project`, `find_alternatives`, `get_breaking_changes`, `get_known_bugs`, `check_compatibility`, `resolve_error`, `search_errors`, `check_malicious`, `check_typosquat`, `get_scorecard`, `get_maintainer_trust`, `get_quality`, `get_provenance`, `get_trending`, `report_anomaly`, `contact_depscope`, `check_bulk`, `install_command`, `pin_safe`.
+
+Consolidation to 15-18 tools is planned but **not yet applied** — all 29 remain live.
+
+---
+
+## 8. Common tasks
+
+### 8.1 Add a new package source (ecosystem)
+
+1. Add dispatcher in `api/registries.py` — follow the signature of existing fetchers (`fetch_<eco>(package, version=None)`).
+2. Add ecosystem to `ECOSYSTEMS` list in `api/main.py`.
+3. Seed list: add under `scripts/seed_ecosystems.py` or a new `seed_<eco>.py`.
+4. If the registry exposes download stats, add a backfill script under `scripts/<eco>_downloads_backfill.py`.
+5. Update `api/health.py` if the new signal doesn't map to existing fields.
+6. Cron: add weekly backfill line. Daily `recalc_health_merged.py` picks up new rows automatically.
+7. Update this file's table in §3.1 and the README ecosystems table.
+
+### 8.2 Fix a health-calc bug
+
+- Single function: `health.calculate_health(...)` in `api/health.py`.
+- Re-run for the whole DB: `scripts/recalc_health_merged.py` (writes `packages.health_score`, `health_breakdown`).
+- For one package: `python3 -c "from api.health import calculate_health; ..."` or hit `/api/check/{eco}/{pkg}?refresh=1`.
+
+### 8.3 Add an admin endpoint
+
+1. Decorate with `@app.get("/api/admin/<name>", include_in_schema=False)` in `api/main.py`.
+2. First line: `require_admin(x_api_key)` → raises 401 if missing/mismatched.
+3. Add to admin frontend under `frontend/app/admin/`.
+4. Stage-deploy → smoke-test with `curl -H "X-API-Key: $ADMIN_API_KEY" ...`.
+
+### 8.4 Invalidate cache
+
+```bash
+# Stage
+redis-cli -n 1 FLUSHDB
+# Prod
+redis-cli -n 0 FLUSHDB
+```
+
+### 8.5 Sync prod → stage
+
+```bash
+bash /home/deploy/depscope-stage/scripts/sync_prod_to_stage.sh
+```
+
+Refreshes stage DB and code. **Never run the reverse direction without an explicit commit.**
+
+### 8.6 Full backup
+
+```bash
+bash /home/deploy/depscope/scripts/full_backup.sh
+```
+
+pg_dump + /home/deploy/depscope tarball → OVH S3 restic repo.
+
+---
+
+## 9. Rules (hard constraints)
+
+- **Stage first** for every code and schema change.
+- **No destructive ops on prod** without `full_backup.sh` first.
+- **Italian** in internal memory files (e.g. `~/.claude/projects/.../MEMORY.md`). **English** in repo files (CLAUDE.md, README.md, code comments).
+- Pages at `/stats` hide numbers until the next 10k threshold (see `api/main.py` and `frontend/app/stats/`).
+- Pure algorithmic health score — **no LLM** in the hot path.
+- Three pillars for every user-facing message: **token-saving, energy-saving, security**.
+
+---
+
+## 10. Contact / ownership
+
+- **Company**: Cuttalo srl, P.IVA IT03242390734, Grottaglie (TA).
+- **Mailbox**: depscope@cuttalo.com (IMAP on VM 130).
+- **Admin dashboard**: https://depscope.dev/admin (API key required).
+- **Support**: depscope@cuttalo.com.

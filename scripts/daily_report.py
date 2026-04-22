@@ -21,7 +21,7 @@ SMTP_PORT = 587
 
 async def gather_stats():
     import asyncpg
-    conn = await asyncpg.connect("postgresql://depscope:${DB_PASSWORD}@localhost:5432/depscope", timeout=5)
+    conn = await asyncpg.connect(os.environ.get("DATABASE_URL", "postgresql://depscope:CHANGEME@localhost:5432/depscope"), timeout=5)
 
     # Totali
     total_calls = await conn.fetchval("SELECT COUNT(*) FROM api_usage")

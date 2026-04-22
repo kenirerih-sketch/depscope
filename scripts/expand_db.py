@@ -1,3 +1,4 @@
+import os
 """Expand database massively — fetch top packages from registries"""
 import asyncio
 import aiohttp
@@ -104,7 +105,7 @@ async def main():
     
     # Load existing packages
     import asyncpg
-    conn = await asyncpg.connect("postgresql://depscope:${DB_PASSWORD}@localhost:5432/depscope")
+    conn = await asyncpg.connect(os.environ.get("DATABASE_URL", "postgresql://depscope:CHANGEME@localhost:5432/depscope"))
     rows = await conn.fetch("SELECT ecosystem, name FROM packages")
     for r in rows:
         processed.add(f"{r['ecosystem']}:{r['name']}")

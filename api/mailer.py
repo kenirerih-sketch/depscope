@@ -1,30 +1,38 @@
 """SMTP + Sent-folder helper used by all DepScope transactional email.
 
-Emails are relayed through the central mail VM (10.10.0.130) on port 25 and a
-copy is persisted to the sender's IMAP ``Sent`` folder via ``doveadm save``
-over SSH. Saving to the Sent folder is a hard requirement coming from the
-``feedback_save_sent_emails`` rule: without it, messages disappear for the
+Emails are relayed through the submission endpoint (mail.cuttalo.com:587,
+STARTTLS + AUTH) and a copy is persisted in the sender's IMAP ``Sent`` folder
+via IMAPS APPEND. Saving to the Sent folder is a hard requirement coming from
+the ``feedback_save_sent_emails`` rule: without it, messages disappear for the
 human operator who reads the depscope@cuttalo.com mailbox through Roundcube.
 """
 from __future__ import annotations
 
+import imaplib
 import os
 import smtplib
-import subprocess
+import time
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formatdate, make_msgid
 from typing import Optional
 
 
-SMTP_HOST = os.getenv("DEPSCOPE_SMTP_HOST", "10.10.0.130")
-SMTP_PORT = int(os.getenv("DEPSCOPE_SMTP_PORT", "25"))
+SMTP_HOST = os.getenv("DEPSCOPE_SMTP_HOST") or os.getenv("SMTP_HOST", "mail.cuttalo.com")
+SMTP_PORT = int(os.getenv("DEPSCOPE_SMTP_PORT") or os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("DEPSCOPE_SMTP_USER") or os.getenv("SMTP_USER", "")
+SMTP_PASS = os.getenv("DEPSCOPE_SMTP_PASS") or os.getenv("SMTP_PASS", "")
 SMTP_FROM_EMAIL = os.getenv("DEPSCOPE_SMTP_FROM", "depscope@cuttalo.com")
 SMTP_FROM_NAME = os.getenv("DEPSCOPE_SMTP_FROM_NAME", "DepScope")
 
-# SSH host + account used to reach Dovecot on the mail VM.
-MAIL_SSH_HOST = os.getenv("DEPSCOPE_MAIL_SSH_HOST", "deploy@10.10.0.130")
-MAIL_SSH_TIMEOUT = int(os.getenv("DEPSCOPE_MAIL_SSH_TIMEOUT", "8"))
+# IMAP config for saving a copy in Sent. Defaults reuse the SMTP credentials
+# since depscope@cuttalo.com authenticates against the same Dovecot backend.
+IMAP_HOST = os.getenv("DEPSCOPE_IMAP_HOST") or os.getenv("IMAP_HOST", SMTP_HOST)
+IMAP_PORT = int(os.getenv("DEPSCOPE_IMAP_PORT") or os.getenv("IMAP_PORT", "993"))
+IMAP_USER = os.getenv("DEPSCOPE_IMAP_USER") or os.getenv("IMAP_USER", SMTP_USER or SMTP_FROM_EMAIL)
+IMAP_PASS = os.getenv("DEPSCOPE_IMAP_PASS") or os.getenv("IMAP_PASS", SMTP_PASS)
+IMAP_SENT_MAILBOX = os.getenv("DEPSCOPE_IMAP_SENT", "Sent")
+IMAP_TIMEOUT = int(os.getenv("DEPSCOPE_IMAP_TIMEOUT", "10"))
 
 
 def _build_message(
@@ -72,58 +80,49 @@ def send_email(
     raw = msg.as_string()
     try:
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as s:
+            s.ehlo()
+            # Use STARTTLS + AUTH when credentials are provided (public submission
+            # endpoint on port 587). Falls back to unauthenticated relay when
+            # talking to an internal trusted relay on port 25.
+            if SMTP_USER and SMTP_PASS:
+                s.starttls()
+                s.ehlo()
+                s.login(SMTP_USER, SMTP_PASS)
             s.sendmail(SMTP_FROM_EMAIL, [to], raw)
     except Exception as exc:  # pragma: no cover - relay handles most problems
         print(f"[mailer] SMTP send failed to={to!r} subject={subject!r}: {exc}")
         return False
 
-    # Best-effort: persist to the sender's Sent mailbox via doveadm.
+    # Best-effort: persist to the sender's Sent mailbox via IMAP APPEND.
     try:
-        _save_to_sent(SMTP_FROM_EMAIL, raw)
+        _save_to_sent(raw)
     except Exception as exc:  # pragma: no cover
         print(f"[mailer] save_to_sent failed: {exc}")
     return True
 
 
-def _save_to_sent(account_email: str, raw_message: str) -> None:
-    """Append ``raw_message`` to ``account_email``'s Sent folder via SSH.
+def _save_to_sent(raw_message: str) -> None:
+    """Append ``raw_message`` to the Sent mailbox via IMAPS.
 
-    We pipe the raw RFC-822 bytes through ``ssh deploy@vm130 sudo doveadm save
-    -u <account> -m Sent`` which delegates to Dovecot so the message ends up
-    both on disk (Maildir) and in the index &mdash; Roundcube sees it at once.
-    After saving, we flag the message as ``\\Seen`` so it shows up under
-    "Sent" instead of as an unread item.
+    Uses IMAP APPEND with the ``\\Seen`` flag so the message shows up under
+    "Sent" (not as an unread item) in Roundcube. Replaces the legacy SSH +
+    ``doveadm save`` path which required LAN reachability to the mail VM.
     """
-    cmd = [
-        "ssh",
-        "-o", "BatchMode=yes",
-        "-o", "StrictHostKeyChecking=no",
-        "-o", f"ConnectTimeout={MAIL_SSH_TIMEOUT}",
-        MAIL_SSH_HOST,
-        f"sudo -n doveadm save -u {account_email} -m Sent",
-    ]
-    proc = subprocess.run(
-        cmd,
-        input=raw_message.encode("utf-8"),
-        capture_output=True,
-        timeout=MAIL_SSH_TIMEOUT + 2,
-    )
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"doveadm save rc={proc.returncode} err={proc.stderr.decode('utf-8', 'replace')[:200]}"
-        )
+    if not IMAP_PASS:
+        raise RuntimeError("IMAP_PASS not configured")
 
-    # Mark the newly-saved message as Seen so Roundcube displays it in Sent
-    # rather than as "unread". We flag the highest UID we can find.
-    flag_cmd = [
-        "ssh",
-        "-o", "BatchMode=yes",
-        "-o", "StrictHostKeyChecking=no",
-        "-o", f"ConnectTimeout={MAIL_SSH_TIMEOUT}",
-        MAIL_SSH_HOST,
-        (
-            f"sudo -n doveadm flags add -u {account_email} '\\Seen' "
-            f"mailbox Sent SAVEDSINCE 5s"
-        ),
-    ]
-    subprocess.run(flag_cmd, capture_output=True, timeout=MAIL_SSH_TIMEOUT + 2)
+    data = raw_message.encode("utf-8")
+    # RFC-3501 date-time literal for APPEND.
+    date_time = imaplib.Time2Internaldate(time.time())
+
+    imap = imaplib.IMAP4_SSL(IMAP_HOST, IMAP_PORT, timeout=IMAP_TIMEOUT)
+    try:
+        imap.login(IMAP_USER, IMAP_PASS)
+        typ, _ = imap.append(IMAP_SENT_MAILBOX, "(\\Seen)", date_time, data)
+        if typ != "OK":
+            raise RuntimeError(f"IMAP APPEND returned {typ}")
+    finally:
+        try:
+            imap.logout()
+        except Exception:
+            pass

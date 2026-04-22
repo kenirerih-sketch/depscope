@@ -620,8 +620,24 @@ async def fetch_nuget(name: str) -> dict | None:
     # Collect version numbers
     versions_list = [item.get("catalogEntry", {}).get("version", "") for item in page_items if item.get("catalogEntry")]
 
-    # Get download count
+    # Get download count via Azure Search API (returns cumulative totalDownloads)
+    # Approximate weekly as total/200 (≈4 years average age) so it buckets
+    # correctly in the popularity scorer without overshooting for fresh pkgs.
     downloads_weekly = 0
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"https://azuresearch-usnc.nuget.org/query?q=PackageId:{name}&prerelease=true&take=1",
+                timeout=aiohttp.ClientTimeout(total=5),
+            ) as resp:
+                if resp.status == 200:
+                    srch = await resp.json()
+                    data_items = srch.get("data") or []
+                    if data_items:
+                        total_dl = data_items[0].get("totalDownloads") or 0
+                        downloads_weekly = total_dl // 200
+    except Exception:
+        pass
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(f"https://api.nuget.org/v3-flatcontainer/{name_lower}/index.json", timeout=aiohttp.ClientTimeout(total=5)) as resp:
@@ -950,6 +966,10 @@ async def fetch_swift(name: str) -> dict | None:
     except Exception:
         pass
 
+    # Swift has no central downloads metric; use GitHub stars as a popularity
+    # proxy (scaled ×10 so ranges align loosely with npm-style thresholds:
+    # 10K stars → 100K "downloads" → 14 popularity points).
+    stars = int(repo.get("stargazers_count") or 0)
     return {
         "ecosystem": "swift",
         "name": name,
@@ -958,7 +978,7 @@ async def fetch_swift(name: str) -> dict | None:
         "license": repo.get("license", {}).get("spdx_id", "") if isinstance(repo.get("license"), dict) else "",
         "homepage": repo.get("homepage", "") or repo_url,
         "repository": repo_url,
-        "downloads_weekly": None,  # Swift/SPM has no central download metric.
+        "downloads_weekly": stars * 10,
         "maintainers_count": 1,
         "deprecated": repo.get("archived", False),
         "deprecated_message": "Archived" if repo.get("archived") else None,
@@ -967,6 +987,7 @@ async def fetch_swift(name: str) -> dict | None:
         "versions": versions_list[:20],
         "all_version_count": len(versions_list),
         "dependencies": [],
+        "stars": stars,
     }
 
 
@@ -1342,6 +1363,34 @@ async def fetch_conda(name: str) -> dict | None:
     }
 
 
+async def _fetch_homebrew_last_commit(name: str) -> str | None:
+    """Return the latest commit date (ISO-8601) for a formula/cask on GitHub."""
+    import os
+    headers = {
+        "Accept": "application/vnd.github.v3+json",
+        "User-Agent": "DepScope/0.1 (https://depscope.dev)",
+    }
+    tok = os.environ.get("GH_TOKEN")
+    if tok:
+        headers["Authorization"] = f"Bearer {tok}"
+    for repo, subdir in (("Homebrew/homebrew-core", "Formula"),
+                         ("Homebrew/homebrew-cask", "Casks")):
+        for path in (f"{subdir}/{name[0].lower()}/{name}.rb", f"{subdir}/{name}.rb"):
+            try:
+                url = f"https://api.github.com/repos/{repo}/commits?path={path}&per_page=1"
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=5)) as r:
+                        if r.status != 200:
+                            continue
+                        data = await r.json()
+                        if not data:
+                            continue
+                        return data[0].get("commit", {}).get("author", {}).get("date")
+            except Exception:
+                continue
+    return None
+
+
 async def fetch_homebrew(name: str) -> dict | None:
     """Fetch Homebrew formula from formulae.brew.sh.
 
@@ -1418,6 +1467,8 @@ async def fetch_homebrew(name: str) -> dict | None:
                         downloads_30d = int(v)
         versions_list = [latest_version] if latest_version else []
 
+    last_published = await _fetch_homebrew_last_commit(name)
+
     return {
         "ecosystem": "homebrew",
         "name": name,
@@ -1431,7 +1482,7 @@ async def fetch_homebrew(name: str) -> dict | None:
         "deprecated": deprecated,
         "deprecated_message": deprecated_msg,
         "first_published": None,
-        "last_published": None,
+        "last_published": last_published,
         "versions": versions_list[:20],
         "all_version_count": len(versions_list),
         "dependencies": all_deps[:50] if isinstance(all_deps, list) else [],
@@ -1526,15 +1577,30 @@ def _is_vuln_relevant(vuln: dict, latest_version: str) -> bool:
     return True  # Can't determine, include it
 
 
-async def fetch_vulnerabilities(ecosystem: str, name: str, latest_version: str = None) -> list:
-    """Fetch from OSV.dev, filtered to only vulns affecting latest version. Cached 6h in Redis."""
+async def fetch_vulnerabilities(
+    ecosystem: str,
+    name: str,
+    latest_version: str = None,
+    repository: str = None,
+) -> list:
+    """Fetch from OSV.dev, filtered to only vulns affecting latest version.
+    Cached 6h in Redis.
+
+    For SwiftURL/Go ecosystems, OSV requires the canonical module path
+    ("github.com/<org>/<repo>") rather than the short package name. When a
+    `repository` URL is provided we derive the OSV-compatible identifier.
+    """
     # Check Redis cache first
     vuln_cache_key = f"vulns:{ecosystem}:{name}"
     cached = await cache_get(vuln_cache_key)
     if cached is not None:
         return cached
 
-    payload = {"package": {"name": name, "ecosystem": _osv_ecosystem(ecosystem)}}
+    osv_name = _osv_package_name(ecosystem, name, repository)
+    if not osv_name:
+        await cache_set(vuln_cache_key, [], ttl=21600)
+        return []
+    payload = {"package": {"name": osv_name, "ecosystem": _osv_ecosystem(ecosystem)}}
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -1548,18 +1614,7 @@ async def fetch_vulnerabilities(ecosystem: str, name: str, latest_version: str =
 
         vulns = []
         for v in data.get("vulns", []):
-            severity = "unknown"
-            for s in v.get("severity", []):
-                if s.get("type") == "CVSS_V3":
-                    score = _parse_cvss_score(s.get("score", ""))
-                    if score >= 9.0:
-                        severity = "critical"
-                    elif score >= 7.0:
-                        severity = "high"
-                    elif score >= 4.0:
-                        severity = "medium"
-                    else:
-                        severity = "low"
+            severity = _derive_severity(v)
 
             aliases = v.get("aliases", [])
             vuln_id = aliases[0] if aliases else v.get("id", "")
@@ -1608,15 +1663,32 @@ async def fetch_vulnerabilities(ecosystem: str, name: str, latest_version: str =
 
 
 def _parse_dt(val):
-    """Parse date string to datetime object for asyncpg."""
+    """Parse date string to datetime object for asyncpg.
+
+    Accepts ISO-8601 ("2020-04-20T02:25:51Z"), CocoaPods-style
+    ("2020-04-20 02:25:51 UTC"), and plain date ("2020-04-20"). Returns None
+    only when the value is genuinely missing.
+    """
     if val is None:
         return None
     if isinstance(val, datetime):
         return val
+    s = str(val).strip()
+    if not s:
+        return None
+    from datetime import timezone
+    # Normalize common non-ISO variants
+    s_norm = s
+    if s_norm.endswith(" UTC"):
+        s_norm = s_norm[:-4] + "+00:00"
+    s_norm = s_norm.replace("Z", "+00:00")
+    # Replace first space with T when the string has a time after it
+    if "T" not in s_norm and " " in s_norm:
+        parts = s_norm.split(" ", 1)
+        if ":" in parts[1]:
+            s_norm = parts[0] + "T" + parts[1]
     try:
-        from datetime import timezone
-        dt = datetime.fromisoformat(str(val).replace('Z', '+00:00'))
-        return dt
+        return datetime.fromisoformat(s_norm)
     except (ValueError, TypeError):
         return None
 
@@ -1698,8 +1770,98 @@ def _osv_ecosystem(eco: str) -> str:
     return {"npm": "npm", "pypi": "PyPI", "cargo": "crates.io", "go": "Go", "composer": "Packagist", "maven": "Maven", "nuget": "NuGet", "rubygems": "RubyGems", "pub": "Pub", "hex": "Hex", "swift": "SwiftURL", "cocoapods": "CocoaPods", "cpan": "CPAN", "hackage": "Hackage", "cran": "CRAN", "conda": "PyPI", "homebrew": ""}.get(eco, eco)
 
 
+def _osv_package_name(eco: str, name: str, repository: str | None = None) -> str:
+    """Return the package identifier OSV expects for this ecosystem.
+
+    Most ecosystems use the plain package name. SwiftURL requires the
+    canonical module path "github.com/<org>/<repo>" — if we have a
+    repository URL we derive it, otherwise we pass the name through (which
+    will almost always miss).
+    """
+    if eco == "swift":
+        if repository:
+            for prefix in ("https://github.com/", "http://github.com/", "github.com/"):
+                if repository.startswith(prefix):
+                    return "github.com/" + repository[len(prefix):].rstrip("/")
+        # Name might already be "org/repo"
+        if "/" in name and not name.startswith("github.com/"):
+            return f"github.com/{name}"
+        return name
+    return name
+
+
 def _parse_cvss_score(score_str: str) -> float:
+    """Parse a CVSS score. Accepts either a numeric string ("7.5") or a full
+    vector ("CVSS:3.1/AV:N/..."). Returns the base score, or 0.0 on failure."""
+    if not score_str:
+        return 0.0
+    # Fast path — already numeric
     try:
         return float(score_str)
     except (ValueError, TypeError):
-        return 5.0
+        pass
+    # Vector — parse via cvss library
+    try:
+        from cvss import CVSS2, CVSS3, CVSS4
+        s = score_str.strip()
+        if s.startswith("CVSS:4"):
+            return float(CVSS4(s).base_score)
+        if s.startswith("CVSS:3"):
+            return float(CVSS3(s).base_score)
+        # CVSS 2 has no CVSS: prefix; bare vector like "AV:N/AC:L/..."
+        return float(CVSS2(s).base_score)
+    except Exception:
+        return 0.0
+
+
+_GHSA_SEVERITY_MAP = {
+    "CRITICAL": "critical",
+    "HIGH":     "high",
+    "MODERATE": "medium",
+    "MEDIUM":   "medium",
+    "LOW":      "low",
+}
+
+
+def _score_to_severity(score: float) -> str:
+    if score >= 9.0:
+        return "critical"
+    if score >= 7.0:
+        return "high"
+    if score >= 4.0:
+        return "medium"
+    if score > 0.0:
+        return "low"
+    return "unknown"
+
+
+def _derive_severity(vuln: dict) -> str:
+    """Extract severity from an OSV vuln record with multi-source fallback:
+    1. database_specific.severity (GHSA: CRITICAL/HIGH/MODERATE/LOW)
+    2. severity[] array with CVSS vector (V4 / V3 / V2)
+    3. Heuristic keywords in summary (malicious code = critical)
+    4. "unknown"
+    """
+    # 1. GHSA text severity
+    db_spec = vuln.get("database_specific") or {}
+    txt = str(db_spec.get("severity") or "").upper().strip()
+    if txt in _GHSA_SEVERITY_MAP:
+        return _GHSA_SEVERITY_MAP[txt]
+
+    # 2. CVSS vectors — pick highest version available
+    best_score = 0.0
+    for s in vuln.get("severity") or []:
+        stype = s.get("type") or ""
+        if stype.startswith("CVSS"):
+            score = _parse_cvss_score(s.get("score", ""))
+            if score > best_score:
+                best_score = score
+    if best_score > 0:
+        return _score_to_severity(best_score)
+
+    # 3. Heuristic from summary — OSV "Malicious code in X" entries are always critical
+    summary = (vuln.get("summary") or vuln.get("details") or "").lower()
+    if "malicious code" in summary or "malicious package" in summary or "supply chain attack" in summary:
+        return "critical"
+
+    return "unknown"

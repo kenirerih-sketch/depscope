@@ -2,6 +2,15 @@ import os
 from pydantic import BaseModel
 """DepScope API - Package Intelligence for AI Agents — Everything Free"""
 import time
+
+# MCP tool count derived at startup from mcp-server/tools.js (dynamic, no drift).
+try:
+    import os as _os, re as _re
+    _tools_path = _os.path.join(_os.path.dirname(__file__), _os.pardir, "mcp-server", "tools.js")
+    with open(_tools_path) as _f:
+        MCP_TOOLS_COUNT = len(_re.findall(r'^\s+name:\s*"[a-z_]+",\s*$', _f.read(), _re.MULTILINE))
+except Exception:
+    MCP_TOOLS_COUNT = 22
 import re
 import asyncio
 from contextlib import asynccontextmanager
@@ -50,7 +59,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="DepScope",
-    description="Package Intelligence API for AI Agents. Free, open, no auth required. 22,000+ packages across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew). 402 vulnerabilities tracked. 29 MCP tools (remote transport available at https://mcp.depscope.dev/mcp). Three verticals on one shared infrastructure: package health, error -> fix database, and stack compatibility matrix. Save tokens, save energy, ship safer code.",
+    description="Package Intelligence API for AI Agents. Free, open, no auth required. 30,000+ packages across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew). ~2,200 vulnerabilities tracked. MCP server (remote transport available at https://mcp.depscope.dev/mcp). Three verticals on one shared infrastructure: package health, error -> fix database, and stack compatibility matrix. Save tokens, save energy, ship safer code.",
     version=VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
@@ -452,21 +461,13 @@ async def _fetch_full_package(ecosystem: str, package: str) -> dict | None:
             "note": "Insufficient data to compute reliable score",
         }
 
-    # --- Fix 4 (expanded): enrich recommendation with inline alternatives so
-    # agents don't need a second round-trip. Trigger on find_alternative,
-    # do_not_use, deprecated packages, or high-risk health score — all cases
-    # where an agent is likely about to ask "what should I use instead?".
+    # Always expose curated alternatives when we have them — agents save a
+    # round-trip, and the seed data is explicit about when each alt fits.
     try:
-        _needs_alts = (
-            recommendation.get("action") in ("find_alternative", "do_not_use")
-            or bool(pkg_data.get("deprecated"))
-            or (health.get("risk") == "high")
-        )
-        if _needs_alts:
-            from api.verticals import get_alternatives as _get_alts_db
-            alts = await _get_alts_db(ecosystem, package)
-            if alts:
-                recommendation["alternatives"] = alts[:3]
+        from api.verticals import get_alternatives as _get_alts_db
+        alts = await _get_alts_db(ecosystem, package)
+        if alts:
+            recommendation["alternatives"] = alts[:3]
     except Exception:
         pass
 
@@ -2490,7 +2491,7 @@ async def get_stats():
         "ecosystem_counts": eco_counts,
         "version": VERSION,
         "pricing": "free",
-        "mcp_tools": 29,
+        "mcp_tools": MCP_TOOLS_COUNT,
     }
 
 
@@ -2551,8 +2552,8 @@ async def ai_plugin():
         "schema_version": "v1",
         "name_for_human": "DepScope",
         "name_for_model": "depscope",
-        "description_for_human": "Check package health, vulnerabilities, error fixes and stack compatibility before installing. 17 ecosystems, 29 MCP tools (zero-install remote MCP), 100% free.",
-        "description_for_model": "Use DepScope to check if a software package is safe, maintained, and up-to-date before suggesting it to install. Supports 17 ecosystems: npm, pypi, cargo, go, composer, maven, nuget, rubygems, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew. 14,700+ packages indexed, 402 vulnerabilities tracked. Three verticals on one API: (1) package health via GET /api/check/{ecosystem}/{package} for full health report with vulns+score+recommendation, GET /api/prompt/{ecosystem}/{package} for LLM-optimized plain text (saves ~74% tokens), GET /api/compare/{ecosystem}/pkg1,pkg2 to compare, GET /api/alternatives/{ecosystem}/{package} for replacements, POST /api/scan to audit dependency lists. (2) error -> fix resolution via POST /api/error/resolve with a stack trace, GET /api/error?code=X for lookups. (3) stack compatibility via GET /api/compat?packages=next@16,react@19 to verify a combo before upgrading. Also GET /api/bugs/{ecosystem}/{package} for non-CVE known bugs per version. No authentication required for public endpoints. Optional API keys for higher limits. Completely free.",
+        "description_for_human": "Check package health, vulnerabilities, error fixes and stack compatibility before installing. 17 ecosystems, MCP server (zero-install remote), 100% free.",
+        "description_for_model": "Use DepScope to check if a software package is safe, maintained, and up-to-date before suggesting it to install. Supports 17 ecosystems: npm, pypi, cargo, go, composer, maven, nuget, rubygems, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew. 30,000+ packages indexed, ~2,200 vulnerabilities tracked. Three verticals on one API: (1) package health via GET /api/check/{ecosystem}/{package} for full health report with vulns+score+recommendation, GET /api/prompt/{ecosystem}/{package} for LLM-optimized plain text (saves ~74% tokens), GET /api/compare/{ecosystem}/pkg1,pkg2 to compare, GET /api/alternatives/{ecosystem}/{package} for replacements, POST /api/scan to audit dependency lists. (2) error -> fix resolution via POST /api/error/resolve with a stack trace, GET /api/error?code=X for lookups. (3) stack compatibility via GET /api/compat?packages=next@16,react@19 to verify a combo before upgrading. Also GET /api/bugs/{ecosystem}/{package} for non-CVE known bugs per version. No authentication required for public endpoints. Optional API keys for higher limits. Completely free.",
         "auth": {"type": "none"},
         "api": {"type": "openapi", "url": "https://depscope.dev/openapi.json"},
         "logo_url": "https://depscope.dev/logo.png",
@@ -3544,6 +3545,363 @@ async def admin_stats_full(request: Request):
         "api_calls_total": usage_total,
         "registered_users": users_count,
         "ecosystems": ["npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"],
+    }
+
+
+@app.get("/api/admin/overview", include_in_schema=False)
+async def admin_overview(request: Request, range: str = "30d"):
+    """Unified admin overview — single source of truth for KPIs.
+
+    Returns counts for three explicit interpretations of "API call":
+      - all:    every row in api_usage (raw traffic incl. scrapers)
+      - active: excludes scraping bots (claude_bot, gpt_bot, unknown) + empty UA
+      - humans: browser traffic only (source='browser')
+
+    Also exposes DB coverage (packages, vulns, alternatives, bugs, breaking),
+    users, subscriptions, revenue, per-ecosystem coverage matrix, and cache /
+    latency / error quality metrics.
+    """
+    user = await _get_user_from_request(request)
+    if not user or user["role"] != "admin":
+        raise HTTPException(403, "Admin only")
+
+    range_map = {"1d": "1 day", "7d": "7 days", "30d": "30 days", "90d": "90 days"}
+    interval = range_map.get(range)
+    where_range = (
+        f"created_at > NOW() - INTERVAL '{interval}'" if interval else "TRUE"
+    )
+
+    views_filters = {
+        "all":    "TRUE",
+        "active": "(source IS NULL OR source NOT IN ('claude_bot','gpt_bot','unknown')) AND user_agent != ''",
+        "humans": "source = 'browser'",
+    }
+
+    from datetime import datetime as _DT, timezone as _TZ
+    pool = await get_pool()
+    result = {
+        "range": range if interval else "all",
+        "generated_at": _DT.now(_TZ.utc).isoformat(),
+        "filter_semantics": {
+            "all":    "Raw count — every request logged to api_usage",
+            "active": "Excludes scraping bots (claude_bot, gpt_bot, unknown) and empty user-agent",
+            "humans": "Browser traffic only (source='browser')",
+        },
+        "views": {},
+    }
+
+    async with pool.acquire() as conn:
+        for name, flt in views_filters.items():
+            row = await conn.fetchrow(f"""
+                SELECT
+                    COUNT(*)                                                AS calls,
+                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day')
+                                                                            AS calls_24h,
+                    COUNT(DISTINCT ip_address)                              AS unique_ips,
+                    COUNT(DISTINCT country)                                 AS unique_countries,
+                    COUNT(*) FILTER (WHERE cache_hit)                       AS cache_hits,
+                    COUNT(*) FILTER (WHERE status_code >= 400)              AS errors,
+                    COALESCE(AVG(response_time_ms)::int, 0)                 AS avg_ms,
+                    COALESCE(
+                        PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY response_time_ms)::int, 0
+                    ) AS p50_ms,
+                    COALESCE(
+                        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time_ms)::int, 0
+                    ) AS p95_ms
+                FROM api_usage
+                WHERE {where_range} AND {flt}
+            """)
+            calls = row["calls"] or 0
+            cache_hits = row["cache_hits"] or 0
+            errors = row["errors"] or 0
+            result["views"][name] = {
+                "calls":            calls,
+                "calls_24h":        row["calls_24h"] or 0,
+                "unique_ips":       row["unique_ips"] or 0,
+                "unique_countries": row["unique_countries"] or 0,
+                "cache_hit_rate":   (cache_hits / calls) if calls else 0.0,
+                "error_rate":       (errors / calls) if calls else 0.0,
+                "avg_ms":           row["avg_ms"] or 0,
+                "p50_ms":           row["p50_ms"] or 0,
+                "p95_ms":           row["p95_ms"] or 0,
+            }
+
+        # DB coverage (all-time, view-independent)
+        result["db"] = {
+            "packages":         await conn.fetchval("SELECT COUNT(*) FROM packages"),
+            "vulnerabilities":  await conn.fetchval("SELECT COUNT(*) FROM vulnerabilities"),
+            "alternatives":     await conn.fetchval("SELECT COUNT(*) FROM alternatives"),
+            "errors":           await conn.fetchval("SELECT COUNT(*) FROM errors"),
+            "known_bugs":       await conn.fetchval("SELECT COUNT(*) FROM known_bugs"),
+            "breaking_changes": await conn.fetchval("SELECT COUNT(*) FROM breaking_changes"),
+            "compat_matrix":    await conn.fetchval("SELECT COUNT(*) FROM compat_matrix"),
+        }
+
+        # Users (view-independent)
+        users_total = await conn.fetchval("SELECT COUNT(*) FROM users") or 0
+        active_keys = await conn.fetchval(
+            "SELECT COUNT(*) FROM api_keys WHERE revoked_at IS NULL"
+        ) or 0
+        subs = {}
+        if await conn.fetchval("SELECT to_regclass('public.subscriptions')"):
+            rows = await conn.fetch(
+                "SELECT status, COUNT(*) AS n FROM subscriptions GROUP BY status"
+            )
+            subs = {r["status"]: r["n"] for r in rows}
+        result["users"] = {
+            "total":           users_total,
+            "active_api_keys": active_keys,
+            "subscriptions":   subs,
+        }
+
+        # Revenue placeholder (Stripe not live)
+        mrr_eur = 0
+        paying = 0
+        if subs:
+            # Sum active/trialing as "paying" proxy
+            paying = subs.get("active", 0) + subs.get("trialing", 0)
+        result["revenue"] = {"mrr_eur": mrr_eur, "paying_customers": paying}
+
+        # Per-ecosystem coverage matrix
+        eco_rows = await conn.fetch("""
+            SELECT p.ecosystem,
+                   COUNT(DISTINCT p.id) AS packages,
+                   COUNT(DISTINCT v.id) AS vulnerabilities,
+                   COUNT(DISTINCT a.id) AS alternatives,
+                   COUNT(DISTINCT k.id) AS known_bugs,
+                   COUNT(DISTINCT b.id) AS breaking_changes
+            FROM packages p
+            LEFT JOIN vulnerabilities v   ON v.package_id = p.id
+            LEFT JOIN alternatives a      ON a.package_id = p.id
+            LEFT JOIN known_bugs k        ON k.package_id = p.id
+            LEFT JOIN breaking_changes b  ON b.package_id = p.id
+            GROUP BY p.ecosystem
+            ORDER BY packages DESC
+        """)
+        result["coverage"] = [dict(r) for r in eco_rows]
+
+    return result
+
+
+@app.get("/api/admin/insights", include_in_schema=False)
+async def admin_insights(request: Request):
+    """Admin insights — DB quality & API key usage."""
+    user = await _get_user_from_request(request)
+    if not user or user["role"] != "admin":
+        raise HTTPException(403, "Admin only")
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        # Health score distribution — 10 buckets [0-10, 10-20, ..., 90-100]
+        hist_rows = await conn.fetch("""
+            SELECT LEAST(width_bucket(health_score, 0, 100, 10), 10)::int AS bucket,
+                   COUNT(*) AS n
+            FROM packages
+            WHERE health_score IS NOT NULL
+            GROUP BY bucket ORDER BY bucket
+        """)
+        buckets = {int(r["bucket"]): int(r["n"]) for r in hist_rows}
+        health_distribution = [
+            {"range": f"{i * 10}-{(i + 1) * 10}", "bucket": i + 1, "count": buckets.get(i + 1, 0)}
+            for i in range(10)
+        ]
+
+        # Vulnerability severity
+        sev_rows = await conn.fetch(
+            "SELECT COALESCE(NULLIF(severity, ''), 'unknown') AS severity, COUNT(*) AS n "
+            "FROM vulnerabilities GROUP BY severity ORDER BY n DESC"
+        )
+        vuln_severity = [{"severity": r["severity"], "count": r["n"]} for r in sev_rows]
+
+        # Top API keys (usage derived from api_usage.api_key_id)
+        top_keys_rows = await conn.fetch("""
+            SELECT k.id,
+                   k.name,
+                   k.key_prefix,
+                   k.tier,
+                   k.requests_this_month,
+                   k.last_used_at,
+                   k.created_at,
+                   u.email AS user_email,
+                   COUNT(au.id) AS total_calls
+            FROM api_keys k
+            LEFT JOIN users u     ON u.id = k.user_id
+            LEFT JOIN api_usage au ON au.api_key_id = k.id
+            WHERE k.revoked_at IS NULL
+            GROUP BY k.id, u.email
+            ORDER BY total_calls DESC, k.last_used_at DESC NULLS LAST
+            LIMIT 25
+        """)
+        top_api_keys = [
+            {
+                "id":                  r["id"],
+                "name":                r["name"],
+                "key_prefix":          r["key_prefix"],
+                "tier":                r["tier"],
+                "user_email":          r["user_email"],
+                "requests_this_month": r["requests_this_month"] or 0,
+                "total_calls":         r["total_calls"] or 0,
+                "last_used_at":        r["last_used_at"].isoformat() if r["last_used_at"] else None,
+                "created_at":          r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in top_keys_rows
+        ]
+
+        # Coverage per ecosystem — same as overview but with extra %columns
+        eco_rows = await conn.fetch("""
+            SELECT p.ecosystem,
+                   COUNT(DISTINCT p.id)                                  AS packages,
+                   COUNT(DISTINCT p.id) FILTER (WHERE v.id IS NOT NULL)  AS packages_with_vulns,
+                   COUNT(DISTINCT p.id) FILTER (WHERE a.id IS NOT NULL)  AS packages_with_alternatives,
+                   COUNT(DISTINCT p.id) FILTER (WHERE k.id IS NOT NULL)  AS packages_with_bugs,
+                   COUNT(DISTINCT p.id) FILTER (WHERE b.id IS NOT NULL)  AS packages_with_breaking,
+                   AVG(p.health_score)::int                              AS avg_health,
+                   COALESCE(SUM(p.downloads_monthly)::bigint, 0)         AS downloads_monthly
+            FROM packages p
+            LEFT JOIN vulnerabilities v    ON v.package_id = p.id
+            LEFT JOIN alternatives a       ON a.package_id = p.id
+            LEFT JOIN known_bugs k         ON k.package_id = p.id
+            LEFT JOIN breaking_changes b   ON b.package_id = p.id
+            GROUP BY p.ecosystem
+            ORDER BY packages DESC
+        """)
+        coverage_matrix = [dict(r) for r in eco_rows]
+
+        # Suspect hours — browser source with abnormal calls/IP ratio (spike detector)
+        suspect_rows = await conn.fetch("""
+            SELECT DATE_TRUNC('hour', created_at) AS hr,
+                   COUNT(*)                    AS calls,
+                   COUNT(DISTINCT ip_address)  AS ips
+            FROM api_usage
+            WHERE source = 'browser'
+            GROUP BY hr
+            HAVING COUNT(*) > 200
+               AND COUNT(*)::float / GREATEST(COUNT(DISTINCT ip_address), 1) > 20
+            ORDER BY calls DESC LIMIT 10
+        """)
+        suspect_browser_hours = [
+            {
+                "hour":  r["hr"].isoformat() if r["hr"] else None,
+                "calls": r["calls"],
+                "ips":   r["ips"],
+            }
+            for r in suspect_rows
+        ]
+
+    return {
+        "health_distribution":    health_distribution,
+        "vuln_severity":          vuln_severity,
+        "top_api_keys":           top_api_keys,
+        "coverage_matrix":        coverage_matrix,
+        "suspect_browser_hours":  suspect_browser_hours,
+    }
+
+
+@app.get("/api/admin/timeseries", include_in_schema=False)
+async def admin_timeseries(request: Request, range: str = "7d", view: str = "all"):
+    """Time-series data for admin dashboard graphs.
+
+    - daily_kpis:     per-day metrics for sparklines (calls, cache rate, p95, unique IPs)
+    - heatmap:        DOW × Hour traffic heatmap cells
+    - by_endpoint:    call count per endpoint label
+    - by_source_day:  per-day breakdown of source buckets (claude_bot, browser, …)
+    """
+    user = await _get_user_from_request(request)
+    if not user or user["role"] != "admin":
+        raise HTTPException(403, "Admin only")
+
+    range_map = {"1d": "1 day", "7d": "7 days", "30d": "30 days", "90d": "90 days"}
+    interval = range_map.get(range)
+    where_range = f"created_at > NOW() - INTERVAL '{interval}'" if interval else "TRUE"
+
+    views_filters = {
+        "all":    "TRUE",
+        "active": "(source IS NULL OR source NOT IN ('claude_bot','gpt_bot','unknown')) AND user_agent != ''",
+        "humans": "source = 'browser'",
+    }
+    if view not in views_filters:
+        view = "all"
+    flt = views_filters[view]
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        daily_rows = await conn.fetch(f"""
+            SELECT DATE(created_at) AS day,
+                   COUNT(*) AS calls,
+                   COUNT(*) FILTER (WHERE cache_hit) AS cache_hits,
+                   COUNT(*) FILTER (WHERE status_code >= 400) AS errors,
+                   COUNT(DISTINCT ip_address) AS unique_ips,
+                   COALESCE(AVG(response_time_ms)::int, 0) AS avg_ms,
+                   COALESCE(
+                       PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time_ms)::int, 0
+                   ) AS p95_ms
+            FROM api_usage
+            WHERE {where_range} AND {flt}
+            GROUP BY day ORDER BY day
+        """)
+
+        # Convert to Europe/Rome before extracting DOW/hour so the heatmap
+        # aligns with the admin viewer's local wall-clock instead of UTC.
+        heatmap_rows = await conn.fetch(f"""
+            SELECT EXTRACT(DOW  FROM created_at AT TIME ZONE 'Europe/Rome')::int AS dow,
+                   EXTRACT(HOUR FROM created_at AT TIME ZONE 'Europe/Rome')::int AS hour,
+                   COUNT(*) AS n
+            FROM api_usage
+            WHERE {where_range} AND {flt}
+            GROUP BY dow, hour
+        """)
+
+        endpoint_rows = await conn.fetch(f"""
+            SELECT COALESCE(NULLIF(endpoint, ''), 'unknown') AS endpoint,
+                   COUNT(*) AS calls
+            FROM api_usage
+            WHERE {where_range} AND {flt}
+            GROUP BY endpoint ORDER BY calls DESC LIMIT 15
+        """)
+
+        source_day_rows = await conn.fetch(f"""
+            SELECT DATE(created_at) AS day,
+                   COALESCE(NULLIF(source, ''), 'unknown') AS source,
+                   COUNT(*) AS n
+            FROM api_usage
+            WHERE {where_range} AND source IS NOT NULL
+            GROUP BY day, source ORDER BY day
+        """)
+
+    daily_kpis = [
+        {
+            "day":            str(r["day"]),
+            "calls":          r["calls"],
+            "cache_hit_rate": (r["cache_hits"] / r["calls"]) if r["calls"] else 0.0,
+            "error_rate":     (r["errors"]     / r["calls"]) if r["calls"] else 0.0,
+            "unique_ips":     r["unique_ips"],
+            "avg_ms":         r["avg_ms"],
+            "p95_ms":         r["p95_ms"],
+        }
+        for r in daily_rows
+    ]
+
+    heatmap = [{"dow": r["dow"], "hour": r["hour"], "n": r["n"]} for r in heatmap_rows]
+    by_endpoint = [{"endpoint": r["endpoint"], "calls": r["calls"]} for r in endpoint_rows]
+
+    # Pivot source-by-day into {day, claude_bot, gpt_bot, ...} rows for stacked charts
+    pivot: dict = {}
+    sources_seen: set = set()
+    for r in source_day_rows:
+        d = str(r["day"])
+        pivot.setdefault(d, {"day": d})
+        pivot[d][r["source"]] = r["n"]
+        sources_seen.add(r["source"])
+    by_source_day = sorted(pivot.values(), key=lambda x: x["day"])
+
+    return {
+        "range": range if interval else "all",
+        "view": view,
+        "daily_kpis": daily_kpis,
+        "heatmap": heatmap,
+        "by_endpoint": by_endpoint,
+        "by_source_day": by_source_day,
+        "sources_seen": sorted(sources_seen),
     }
 
 

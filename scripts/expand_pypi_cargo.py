@@ -1,3 +1,4 @@
+import os
 """Expand PyPI and Cargo massively"""
 import asyncio
 import aiohttp
@@ -169,7 +170,7 @@ async def process(eco, name, processed):
 
 async def main():
     import asyncpg
-    conn = await asyncpg.connect("postgresql://depscope:${DB_PASSWORD}@localhost:5432/depscope")
+    conn = await asyncpg.connect(os.environ.get("DATABASE_URL", "postgresql://depscope:CHANGEME@localhost:5432/depscope"))
     rows = await conn.fetch("SELECT ecosystem, name FROM packages")
     processed = set(f"{r['ecosystem']}:{r['name']}" for r in rows)
     await conn.close()

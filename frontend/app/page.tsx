@@ -170,7 +170,7 @@ Reject if action="avoid". Alternatives: /api/alternatives/{ecosystem}/{package}.
     }
   }
 }
-// Zero install. 29 tools auto-registered.
+// Zero install. All tools auto-registered (actual count fetched from /api/stats).
 // Fallback for clients without remote-MCP support:
 //   npm install -g depscope-mcp
 //   then use { command: "npx", args: ["depscope-mcp"] }`,
@@ -390,7 +390,7 @@ export default function Home() {
 
           {/* MCP tools banner */}
           <div className="mt-6 flex flex-wrap justify-center items-center gap-x-3 gap-y-1 text-[11px] text-[var(--text-faded)] font-mono">
-            <span className="tabular-nums"><span className="text-[var(--text-dim)]">{stats?.mcp_tools ?? 29}</span> MCP tools</span>
+            <span className="tabular-nums"><span className="text-[var(--text-dim)]">{stats?.mcp_tools ?? 22}</span> MCP tools</span>
             <span>·</span>
             <span className="tabular-nums"><span className="text-[var(--text-dim)]">{stats?.ecosystems?.length || 17}</span> ecosystems</span>
             <span>·</span>
@@ -674,7 +674,7 @@ export default function Home() {
                   </div>
                   <div className="p-5">
                     <Stat
-                      value={stats?.mcp_tools ?? 29}
+                      value={stats?.mcp_tools ?? 22}
                       label="MCP tools"
                       color="var(--accent)"
                     />
@@ -695,7 +695,7 @@ export default function Home() {
                   <span className="text-sm font-semibold text-[var(--text)]">Remote MCP — zero install</span>
                 </div>
                 <p className="text-sm text-[var(--text-dim)] mb-2">
-                  Claude Desktop / Cursor / Windsurf (recent versions) can connect with just a URL — no <code className="text-[var(--accent)] font-mono text-xs">npm install -g</code> needed. 29 tools auto-registered.
+                  Claude Desktop / Cursor / Windsurf (recent versions) can connect with just a URL — no <code className="text-[var(--accent)] font-mono text-xs">npm install -g</code> needed. All tools auto-registered.
                 </p>
                 <pre className="bg-[var(--bg-soft)] border border-[var(--border)] rounded p-3 text-xs font-mono overflow-x-auto">{`{ "mcpServers": { "depscope": { "url": "https://mcp.depscope.dev/mcp" } } }`}</pre>
               </div>

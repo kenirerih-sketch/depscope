@@ -4,119 +4,140 @@
 
 **Package Intelligence for AI Agents**
 
-Check health, vulnerabilities, and versions before installing. One API call for 17 ecosystems. Free, no auth.
+One free API. 17 ecosystems. 31.000+ packages. 2.282 live vulnerabilities.
+Built so LLM agents stop hallucinating dependencies, stop re-fetching the same JSON, and stop shipping known-vulnerable code.
 
-Save tokens. Save energy. Ship safer code.
+**LLM-optimized responses cut input tokens by ~74% vs raw registry JSON.**
 
 [![API Status](https://img.shields.io/badge/API-live-brightgreen)](https://depscope.dev)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 [![Ecosystems](https://img.shields.io/badge/ecosystems-17-cyan)](https://depscope.dev/api-docs)
-[![Packages](https://img.shields.io/badge/indexed-14.7k%2B-orange)](https://depscope.dev/stats)
-[![MCP Tools](https://img.shields.io/badge/MCP%20tools-12-purple)](https://www.npmjs.com/package/depscope-mcp)
+[![Packages](https://img.shields.io/badge/indexed-31k%2B-orange)](https://depscope.dev/stats)
+[![Vulnerabilities](https://img.shields.io/badge/vulns-2.2k-red)](https://depscope.dev/api-docs)
+[![MCP Tools](https://img.shields.io/badge/MCP%20tools-29-purple)](https://www.npmjs.com/package/depscope-mcp)
 
-[Website](https://depscope.dev) | [API Docs](https://depscope.dev/api-docs) | [Swagger](https://depscope.dev/docs) | [GPT Store](https://chatgpt.com/g/g-69e02d12226c8191a7f24f3a8481bc4e-depscope) | [RapidAPI](https://rapidapi.com/depscope/api/depscope)
+[Website](https://depscope.dev) · [API Docs](https://depscope.dev/api-docs) · [Swagger](https://depscope.dev/docs) · [GPT Store](https://chatgpt.com/g/g-69e02d12226c8191a7f24f3a8481bc4e-depscope) · [RapidAPI](https://rapidapi.com/depscope/api/depscope) · [npm](https://www.npmjs.com/package/depscope-mcp)
 
 </div>
 
 ---
 
-## Why DepScope?
+## Why DepScope
 
-AI coding agents (Claude, ChatGPT, Cursor, Copilot, Aider, Windsurf) suggest packages every day. But they:
+AI coding agents suggest packages every second of every day. They:
 
-- Hallucinate package names that don't exist
-- Suggest deprecated packages (143 indexed in our DB are still being recommended)
-- Have no idea about vulnerabilities
-- Guess version numbers from stale training data
-- Re-search the same runtime errors millions of times
-- Bump versions without knowing if the combo has ever worked
+- Hallucinate package names that don't exist.
+- Recommend deprecated packages that have been dead for years.
+- Have no idea about freshly-disclosed CVEs.
+- Guess version numbers from stale training data.
+- Re-search the same runtime error millions of times.
+- Bump versions without knowing if the combo has ever worked in the wild.
 
-**They also make the same calls independently**, over and over — millions of redundant requests to npm, PyPI, OSV for the exact same data. Wasted bandwidth, tokens, and energy.
+They also **all do the same work independently** — millions of redundant round-trips to npm, PyPI, OSV for identical bytes. That's wasted bandwidth, wasted energy, wasted tokens.
 
-DepScope is the shared infrastructure fix: one service fetches the data, caches it, serves every agent instantly.
+DepScope is the shared fix: aggregate once, serve everyone in milliseconds.
 
-## Three verticals, one API
+### The three pillars
 
-| Vertical | Endpoint | What it answers |
-|----------|----------|-----------------|
-| **Package health** | `/api/check/{eco}/{pkg}` | Is this package safe, maintained, up-to-date? |
-| **Error -> Fix DB** | `/api/error/resolve` (POST) | I just hit this stack trace. What's the verified fix? |
-| **Compatibility Matrix** | `/api/compat?packages=...` | Is `Next 16 + React 19 + Prisma 6` a verified combo? |
+| Pillar | What it means |
+|--------|----------------|
+| **Token-saving** | `/api/prompt/{eco}/{pkg}` returns LLM-ready plain text — ~74% fewer input tokens than raw registry JSON. |
+| **Energy-saving** | One cached hit here replaces thousands of cold fetches against public registries. Less compute, less bandwidth, less footprint. |
+| **Security** | OSV + CISA KEV + EPSS enrichment, OpenSSF Scorecard, malicious-package flags, typosquat detection, maintainer trust — all in one call. |
 
-Same free API. Same 200 req/min. Same shared-infrastructure philosophy.
+---
 
-## 17 Ecosystems. One Endpoint.
+## Quick start
+
+```bash
+# One-shot health check (human-readable JSON)
+curl https://depscope.dev/api/check/npm/express
+
+# LLM-optimized plain text (drop straight into a model context)
+curl https://depscope.dev/api/prompt/npm/express
+```
+
+No auth. No signup. No API key. 200 req/min free tier.
+
+---
+
+## 17 ecosystems, one endpoint
 
 ```bash
 curl https://depscope.dev/api/check/{ecosystem}/{package}
 ```
 
-| Language | Ecosystem | Example |
-|----------|-----------|---------|
-| JavaScript/Node | `npm` | `/api/check/npm/express` |
-| Python | `pypi` | `/api/check/pypi/django` |
-| Rust | `cargo` | `/api/check/cargo/tokio` |
-| Go | `go` | `/api/check/go/github.com/gin-gonic/gin` |
-| PHP | `composer` | `/api/check/composer/laravel/framework` |
-| Java/Kotlin | `maven` | `/api/check/maven/org.springframework.boot/spring-boot-starter` |
-| .NET/C# | `nuget` | `/api/check/nuget/Newtonsoft.Json` |
-| Ruby | `rubygems` | `/api/check/rubygems/rails` |
-| Dart/Flutter | `pub` | `/api/check/pub/http` |
-| Elixir | `hex` | `/api/check/hex/ecto` |
-| Swift | `swift` | `/api/check/swift/vapor` |
-| iOS | `cocoapods` | `/api/check/cocoapods/AFNetworking` |
-| Perl | `cpan` | `/api/check/cpan/DateTime` |
-| Haskell | `hackage` | `/api/check/hackage/lens` |
-| R | `cran` | `/api/check/cran/dplyr` |
-| Data Science | `conda` | `/api/check/conda/scipy` |
-| macOS CLI | `homebrew` | `/api/check/homebrew/git` |
+| Language | Ecosystem | Packages | Example |
+|----------|-----------|---------:|---------|
+| JavaScript / Node | `npm` | 12.708 | `/api/check/npm/express` |
+| Python | `pypi` | 4.731 | `/api/check/pypi/django` |
+| Rust | `cargo` | 4.170 | `/api/check/cargo/tokio` |
+| Perl | `cpan` | 2.683 | `/api/check/cpan/DateTime` |
+| Ruby | `rubygems` | 1.469 | `/api/check/rubygems/rails` |
+| PHP | `composer` | 917 | `/api/check/composer/laravel/framework` |
+| R | `cran` | 733 | `/api/check/cran/dplyr` |
+| .NET / C# | `nuget` | 719 | `/api/check/nuget/Newtonsoft.Json` |
+| macOS CLI | `homebrew` | 603 | `/api/check/homebrew/git` |
+| Java / Kotlin | `maven` | 503 | `/api/check/maven/org.springframework.boot/spring-boot-starter` |
+| Dart / Flutter | `pub` | 460 | `/api/check/pub/http` |
+| Go | `go` | 429 | `/api/check/go/github.com/gin-gonic/gin` |
+| Elixir | `hex` | 302 | `/api/check/hex/ecto` |
+| Haskell | `hackage` | 300 | `/api/check/hackage/lens` |
+| iOS | `cocoapods` | 139 | `/api/check/cocoapods/AFNetworking` |
+| Data Science | `conda` | 127 | `/api/check/conda/scipy` |
+| Swift | `swift` | 61 | `/api/check/swift/vapor` |
 
-## Quick Start
+**Total: 31.054 packages, 2.282 tracked vulnerabilities, 595 curated alternatives.**
 
-```bash
-# Full health check
-curl https://depscope.dev/api/check/npm/express
+---
 
-# LLM-optimized plain text (saves ~74% tokens vs JSON)
-curl https://depscope.dev/api/prompt/npm/express
+## Endpoints summary
 
-# Just the latest version (use before any install)
-curl https://depscope.dev/api/latest/npm/react
+Full reference: [depscope.dev/api-docs](https://depscope.dev/api-docs) · OpenAPI at `/openapi.json` · Swagger UI at `/docs`.
 
-# Does this package exist?
-curl https://depscope.dev/api/exists/npm/my-package
+### Package intelligence
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /api/check/{eco}/{pkg}` | Full health report (the default call). |
+| `GET /api/prompt/{eco}/{pkg}` | LLM-optimized plain text, ~74% token reduction. |
+| `GET /api/latest/{eco}/{pkg}` | Latest version. Fast path. |
+| `GET /api/exists/{eco}/{pkg}` | Exists yes/no. Hallucination guard. |
+| `GET /api/search/{eco}?q=...` | Keyword search across an ecosystem. |
+| `GET /api/alternatives/{eco}/{pkg}` | Curated replacement suggestions. |
+| `GET /api/compare/{eco}/{a},{b},{c}` | Side-by-side comparison (up to 10). |
+| `GET /api/vulns/{eco}/{pkg}` | Vulnerabilities (+ CISA KEV + EPSS enrichment). |
+| `GET /api/typosquat/{eco}/{pkg}` | Is this name a typosquat of a popular package? |
+| `GET /api/malicious/{eco}/{pkg}` | OpenSSF malicious-packages flag. |
+| `GET /api/scorecard/{eco}/{pkg}` | OpenSSF Scorecard 0-10. |
+| `GET /api/quality/{eco}/{pkg}` | Aggregate quality signals. |
+| `GET /api/maintainers/{eco}/{pkg}` | Bus factor, ownership change, author dominance. |
+| `GET /api/provenance/{eco}/{pkg}` | Sigstore / PEP 740 attestations. |
+| `GET /api/license/{eco}/{pkg}` | License classification + commercial safety. |
+| `GET /api/health/{eco}/{pkg}` | Quick 0-100 score. |
+| `GET /api/history/{eco}/{pkg}` | 90-day health trend. |
+| `GET /api/tree/{eco}/{pkg}` | Transitive deps with per-node health. |
+| `POST /api/scan` | Audit a full dependency manifest at once. |
 
-# Find alternatives when deprecated
-curl https://depscope.dev/api/alternatives/npm/request
+### Verticals
 
-# Compare packages
-curl https://depscope.dev/api/compare/npm/express,fastify,hono
+| Endpoint | Purpose |
+|----------|---------|
+| `GET  /api/error?code=X` | Lookup a known runtime error code. |
+| `POST /api/error/resolve` | POST a stack trace → verified fix with package context. |
+| `GET  /api/bugs/{eco}/{pkg}` | Non-CVE known bugs per version. |
+| `GET  /api/compat?packages=next@16,react@19,prisma@6` | Is this combo a verified working stack? |
+| `GET  /api/breaking/{eco}/{pkg}` | Breaking changes between versions. |
+| `GET  /api/migration/{eco}/{from}/{to}` | Migration path from A to B. |
 
-# Scan entire project
-curl -X POST https://depscope.dev/api/scan \
-  -H "Content-Type: application/json" \
-  -d '{"ecosystem":"npm","packages":{"express":"*","lodash":"*"}}'
+### Utility
 
-# Resolve a runtime error to a verified fix
-curl -X POST https://depscope.dev/api/error/resolve \
-  -H "Content-Type: application/json" \
-  -d '{"error":"ERR_PACKAGE_PATH_NOT_EXPORTED","ecosystem":"npm","package":"next"}'
+`GET /api/trending` · `GET /api/now` · `GET /api/ecosystems` · `GET /api/stats` · `GET /api/savings` · `GET /badge/{eco}/{pkg}` (SVG score badge).
 
-# Check a stack compatibility
-curl "https://depscope.dev/api/compat?packages=next@16,react@19,prisma@6"
+---
 
-# Known bugs for a version (non-CVE)
-curl https://depscope.dev/api/bugs/npm/next
+## Use DepScope from your AI agent
 
-# What's trending right now
-curl https://depscope.dev/api/trending
-```
-
-No auth. No signup. No API key required. 200 req/min free tier.
-
-Optional auth via magic-link login gives you `ds_live_xxx` / `ds_test_xxx` keys for higher limits and usage analytics.
-
-## Add to your AI agent (one line)
+### One-line agent rule
 
 **Claude Code** — in `CLAUDE.md`:
 ```
@@ -128,68 +149,36 @@ Optional auth via magic-link login gives you `ds_live_xxx` / `ds_test_xxx` keys 
 Before any install: curl depscope.dev/api/check/{eco}/{pkg} — no auth, free
 ```
 
-**Windsurf, Copilot, Aider** — same pattern, one line in your agent's rule file.
+**Windsurf / Copilot / Aider** — same pattern, one line in the rule file.
 
 **ChatGPT** — search "DepScope" in the GPT Store.
 
-**MCP (20 tools)** — zero install: add `{"mcpServers":{"depscope":{"url":"https://mcp.depscope.dev/mcp"}}}` to your Claude Desktop / Cursor / Windsurf config. Or local stdio: `npm install -g depscope-mcp`. Tools cover: package health, vulnerabilities, malicious/typosquat detection, OpenSSF Scorecard, maintainer trust, quality signals, provenance, alternatives, breaking changes, known bugs, compatibility, error resolution.
+### MCP — 29 tools, zero install
 
-## Endpoints
+Add to your Claude Desktop / Cursor / Windsurf config:
 
-### Package health
-| Endpoint | What it does | When to use |
-|----------|-------------|-------------|
-| `GET /api/check/{eco}/{pkg}` | Full health report | "Is this package safe?" |
-| `GET /api/prompt/{eco}/{pkg}` | LLM-optimized plain text (~74% token reduction) | Feeding result into an LLM context |
-| `GET /api/latest/{eco}/{pkg}` | Just the version | Before any install |
-| `GET /api/exists/{eco}/{pkg}` | Exists yes/no | Before suggesting a package |
-| `GET /api/search/{eco}?q=...` | Search by keyword | "I need a library for X" |
-| `GET /api/alternatives/{eco}/{pkg}` | Replacement suggestions | When package is deprecated |
-| `GET /api/compare/{eco}/{a},{b},{c}` | Side-by-side comparison | "Express vs Fastify?" |
-| `GET /api/vulns/{eco}/{pkg}` | Vulnerability list (+ **CISA KEV** + **EPSS** enrichment) | Security audit with threat intel |
-| `GET /api/typosquat/{eco}/{pkg}` | Detect if a name is a typosquat of a popular package | Before letting an AI install a never-heard-of package |
-| `GET /api/maintainers/{eco}/{pkg}` | Bus factor, primary author dominance, ownership change | Maintainer trust audit |
-| `GET /api/malicious/{eco}/{pkg}` | Flagged by OpenSSF malicious-packages feed? | Block known malware |
-| `GET /api/scorecard/{eco}/{pkg}` | OSS Scorecard (OpenSSF) security posture 0-10 | Overall security hygiene |
-| `GET /api/license/{eco}/{pkg}` | License classification + commercial-safety | Compliance check |
-| `GET /api/provenance/{eco}/{pkg}` | Sigstore / PEP 740 attestations | Build-chain verification |
-| `GET /api/health/{eco}/{pkg}` | Quick score (0-100) | Fast check |
-| `GET /api/history/{eco}/{pkg}` | 90-day health trend | Tracking regressions |
-| `GET /api/tree/{eco}/{pkg}` | Transitive deps with health | Dependency audit |
-| `GET /api/bundle/{eco}/{pkg}` | Min+gzip bundle size | Frontend budget |
-| `GET /api/types/{eco}/{pkg}` | TypeScript quality | Typing coverage |
-| `GET /api/licenses/{eco}/{pkg}` | License audit | Compliance check |
-| `POST /api/scan` | Audit all deps at once | Project-wide audit |
-| `GET /api/trending` | Trending packages | What the ecosystem is installing |
-| `GET /api/now` | Current UTC time | Agents need this |
+```json
+{
+  "mcpServers": {
+    "depscope": {
+      "url": "https://mcp.depscope.dev/mcp"
+    }
+  }
+}
+```
 
-### Error -> Fix DB
-| Endpoint | What it does |
-|----------|-------------|
-| `GET /api/error?code=X` | Lookup a known error code |
-| `POST /api/error/resolve` | POST a stack trace, get verified fixes with package+version context |
+Or install the stdio transport locally:
 
-### Compatibility Matrix & Known Bugs
-| Endpoint | What it does |
-|----------|-------------|
-| `GET /api/compat?packages=...` | Is this combo a verified working stack? |
-| `GET /api/bugs/{eco}/{pkg}` | Non-CVE known bugs affecting specific versions |
+```bash
+npm install -g depscope-mcp
+```
 
-## Health Score
+Tool surface (29 tools, soon consolidating to a tighter 15-18):
+`ai_brief`, `audit_stack`, `get_migration_path`, `check_package`, `get_health_score`, `get_vulnerabilities`, `get_latest_version`, `package_exists`, `get_package_prompt`, `compare_packages`, `scan_project`, `find_alternatives`, `get_breaking_changes`, `get_known_bugs`, `check_compatibility`, `resolve_error`, `search_errors`, `check_malicious`, `check_typosquat`, `get_scorecard`, `get_maintainer_trust`, `get_quality`, `get_provenance`, `get_trending`, `report_anomaly`, `contact_depscope`, `check_bulk`, `install_command`, `pin_safe`.
 
-The score (0-100) is calculated algorithmically from 5 signals. No LLM, pure math, runs in milliseconds:
+---
 
-| Signal | Max | Source |
-|--------|:---:|--------|
-| Maintenance | 25 | Days since last release |
-| Security | 25 | CVEs from OSV, filtered to latest version |
-| Popularity | 20 | Weekly downloads from registry |
-| Maturity | 15 | Total version count |
-| Community | 15 | Maintainers + GitHub stars |
-
-**Key innovation**: we only show vulnerabilities that affect the latest version. Django went from 272 historical "vulnerabilities" to just 1 that matters today. 402 vulnerabilities tracked across the whole index.
-
-## Example Response
+## Example response
 
 ```json
 {
@@ -215,33 +204,60 @@ The score (0-100) is calculated algorithmically from 5 signals. No LLM, pure mat
 }
 ```
 
-## Free Because It Should Be
+---
 
-Package metadata is infrastructure, not a premium feature. The marginal cost of serving the 1,000,000th request for `express` is zero — Redis cache handles it in milliseconds.
+## Health score (algorithmic, 0-100)
 
-Running this once for everyone is cheaper than having millions of AI agents do it independently. Less waste on public registries, less energy, fewer tokens burned re-processing identical JSON.
+Pure math, no LLM in the hot path. Runs in milliseconds.
 
-- **Free tier**: 200 req/min, no auth, full data on every endpoint
-- **Cache TTL**: 1 hour for metadata, 6 hours for vulnerabilities
-- **Coverage**: 14,700+ packages pre-indexed across 17 ecosystems, any package fetched on-demand
-- **Vulnerabilities**: 402 tracked (latest-version-filtered, not historical noise)
-- **MCP**: 20 tools covering all three verticals (remote + stdio transports)
+| Signal | Max | Source |
+|--------|:---:|--------|
+| Maintenance | 25 | Days since last release. |
+| Security | 25 | CVEs from OSV, filtered to the latest version. |
+| Popularity | 20 | Weekly downloads from the registry. |
+| Maturity | 15 | Total version count. |
+| Community | 15 | Maintainers + GitHub stars. |
+
+**Key detail**: we only surface vulnerabilities that actually affect the latest version. Django goes from 272 historical "vulnerabilities" to just the ones that still matter today.
+
+Current average health across the 31k indexed packages: **60 / 100**.
+
+---
+
+## Self-hosting
+
+DepScope is MIT. Everything you need is in this repo:
+
+- **API**: FastAPI (Python 3.13) — `api/main.py` + `api/registries.py`.
+- **Frontend**: Next.js 16 — `frontend/`.
+- **DB**: PostgreSQL 17 with the schema in `api/database.py`.
+- **MCP**: Node 20 — `mcp-server/`.
+- **Cron**: 36 scheduled jobs listed in `CLAUDE.md` §4.
+- **Backups**: `scripts/full_backup.sh` — pg_dump + tarball + restic to S3.
+
+Stage mirror runs side-by-side on different ports behind HTTP basic auth (see `ecosystem.stage.config.js`).
+
+---
 
 ## Ecosystem
 
-- **MCP Remote** (20 tools, zero install): `https://mcp.depscope.dev/mcp`
-- **MCP Server** (20 tools, stdio): [depscope-mcp](https://www.npmjs.com/package/depscope-mcp) — `npm install -g depscope-mcp`
-- **ChatGPT GPT**: search "DepScope" in GPT Store
+- **MCP Remote** (29 tools, zero install): `https://mcp.depscope.dev/mcp`
+- **MCP Server** (stdio): [`depscope-mcp` on npm](https://www.npmjs.com/package/depscope-mcp)
+- **ChatGPT GPT**: search "DepScope" in the GPT Store
 - **RapidAPI**: [hub listing](https://rapidapi.com/depscope/api/depscope)
 - **OpenAPI Spec**: [depscope.dev/openapi.json](https://depscope.dev/openapi.json)
 - **AI Plugin Manifest**: [depscope.dev/.well-known/ai-plugin.json](https://depscope.dev/.well-known/ai-plugin.json)
 - **llms.txt**: [depscope.dev/llms.txt](https://depscope.dev/llms.txt)
 
-## Built With
+---
 
-FastAPI · PostgreSQL 17 · Redis · Next.js 16
+## Built with
 
-Operated by [Cuttalo srl](https://cuttalo.com). Feedback at depscope@cuttalo.com.
+FastAPI · PostgreSQL 17 · Redis · Next.js 16 · Node 20 · Python 3.13 · Proxmox 9.
+
+Operated by [Cuttalo srl](https://cuttalo.com). Feedback: depscope@cuttalo.com.
+
+---
 
 ## License
 
