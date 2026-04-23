@@ -6019,7 +6019,7 @@ async def admin_pageviews(request: Request):
     async with pool.acquire() as conn:
         total = await conn.fetchval("SELECT COUNT(*) FROM page_views_clean")
         today = await conn.fetchval("SELECT COUNT(*) FROM page_views_clean WHERE created_at > CURRENT_DATE")
-        unique_today = await conn.fetchval("SELECT COUNT(DISTINCT ip_hash) FROM page_views_clean WHERE created_at > CURRENT_DATE")
+        unique_today = await conn.fetchval("SELECT COUNT(DISTINCT ip_address) FROM page_views_clean WHERE created_at > CURRENT_DATE")
 
         by_page = await conn.fetch("""
             SELECT path, COUNT(*) as views FROM page_views_clean
@@ -6028,7 +6028,7 @@ async def admin_pageviews(request: Request):
         """)
 
         by_day = await conn.fetch("""
-            SELECT DATE(created_at) as day, COUNT(*) as views, COUNT(DISTINCT ip_hash) as unique_visitors
+            SELECT DATE(created_at) as day, COUNT(*) as views, COUNT(DISTINCT ip_address) as unique_visitors
             FROM page_views_clean WHERE created_at > NOW() - INTERVAL '30 days'
             GROUP BY DATE(created_at) ORDER BY day
         """)
@@ -6070,14 +6070,14 @@ async def admin_charts(request: Request):
     async with pool.acquire() as conn:
         pv_hourly = await conn.fetch(
             "SELECT date_trunc('hour', created_at) as hour, COUNT(*) as views, "
-            "COUNT(DISTINCT ip_hash) as unique_visitors "
+            "COUNT(DISTINCT ip_address) as unique_visitors "
             "FROM page_views_clean WHERE created_at > NOW() - INTERVAL '3 days' "
             "GROUP BY hour ORDER BY hour"
         )
 
         pv_daily = await conn.fetch(
             "SELECT DATE(created_at) as day, COUNT(*) as views, "
-            "COUNT(DISTINCT ip_hash) as unique_visitors "
+            "COUNT(DISTINCT ip_address) as unique_visitors "
             "FROM page_views_clean GROUP BY day ORDER BY day"
         )
 
