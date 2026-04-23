@@ -348,6 +348,41 @@ export default async function PackagePage({ params }: Props) {
     ],
   };
 
+  const vulnCount = data.vulnerabilities?.count || 0;
+  const isDeprecated = Boolean(data.metadata?.deprecated || data.health?.deprecated);
+  const topAlt = (similar && similar[0]) ? similar[0].name : null;
+  const lastPub = data.metadata?.last_published ? String(data.metadata.last_published).slice(0, 10) : "";
+  const safetyAnswer = vulnCount > 0
+    ? data.package + " has " + vulnCount + " known vulnerabilities on the latest version (" + data.latest_version + "). DepScope rates its health at " + score + "/100 (" + data.health.risk + " risk)."
+    : data.package + " has no known vulnerabilities on the latest version (" + data.latest_version + "). DepScope rates its health at " + score + "/100 (" + data.health.risk + " risk).";
+  const deprecatedAnswer = isDeprecated
+    ? "Yes, " + data.package + " is deprecated" + (data.metadata?.deprecated_message ? ": " + data.metadata.deprecated_message : ".") + (topAlt ? " Consider using " + topAlt + " instead." : "")
+    : "No, " + data.package + " is actively maintained. Latest release: " + data.latest_version + (lastPub ? " (" + lastPub + ")" : "") + ".";
+  const altNames = (similar || []).slice(0, 5).map((x: any) => x.name).join(", ");
+  const altAnswer = altNames
+    ? "Popular alternatives to " + data.package + " in " + (ecoLabel[ecosystem] || ecosystem) + " include: " + altNames + "."
+    : "DepScope has no curated alternatives for " + data.package + " at this time.";
+  const versionAnswer = "The latest version of " + data.package + " is " + data.latest_version + (lastPub ? ", released " + lastPub : "") + ".";
+  const vulnQAnswer = vulnCount > 0
+    ? "Yes. " + data.package + " has " + vulnCount + " known vulnerabilities. See depscope.dev/pkg/" + ecosystem + "/" + data.package + " for details."
+    : "No known vulnerabilities on the latest version of " + data.package + ".";
+  const licenseAnswer = data.license
+    ? data.package + " is licensed under " + data.license + "."
+    : "License information for " + data.package + " is not declared in the registry metadata.";
+
+  const faqLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      { "@type": "Question", "name": "Is " + data.package + " safe to use?", "acceptedAnswer": { "@type": "Answer", "text": safetyAnswer } },
+      { "@type": "Question", "name": "What is the latest version of " + data.package + "?", "acceptedAnswer": { "@type": "Answer", "text": versionAnswer } },
+      { "@type": "Question", "name": "Does " + data.package + " have known vulnerabilities?", "acceptedAnswer": { "@type": "Answer", "text": vulnQAnswer } },
+      { "@type": "Question", "name": "Is " + data.package + " deprecated?", "acceptedAnswer": { "@type": "Answer", "text": deprecatedAnswer } },
+      { "@type": "Question", "name": "What are alternatives to " + data.package + "?", "acceptedAnswer": { "@type": "Answer", "text": altAnswer } },
+      { "@type": "Question", "name": "What license does " + data.package + " use?", "acceptedAnswer": { "@type": "Answer", "text": licenseAnswer } },
+    ],
+  };
+
   const curlCmd = `curl https://depscope.dev/api/check/${ecosystem}/${data.package}`;
 
   return (
@@ -362,6 +397,10 @@ export default async function PackagePage({ params }: Props) {
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(sourceCodeLd) }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }}
         />
         <script
           type="application/ld+json"
