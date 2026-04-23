@@ -1616,6 +1616,68 @@ async def fetch_homebrew(name: str) -> dict | None:
     }
 
 
+
+async def fetch_jsr(name: str) -> dict | None:
+    """Fetch JSR package. Accepts '@scope/name' or 'scope/name'."""
+    # Normalize: strip leading '@', split on first '/'
+    raw = (name or "").strip().lstrip("@")
+    if "/" not in raw:
+        return None
+    scope, pkg = raw.split("/", 1)
+    if not scope or not pkg:
+        return None
+    base = f"https://api.jsr.io/scopes/{scope}/packages/{pkg}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(base, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status != 200:
+                    return None
+                meta = await resp.json()
+            # Versions — descending order
+            async with session.get(base + "/versions?limit=50", timeout=aiohttp.ClientTimeout(total=10)) as vresp:
+                versions_data = await vresp.json() if vresp.status == 200 else {"items": []}
+        items = versions_data.get("items") or []
+        # Latest non-yanked version
+        latest = None
+        for it in items:
+            if not it.get("yanked"):
+                latest = it.get("version")
+                break
+        if latest is None and items:
+            latest = items[0].get("version")
+        version_names = [i.get("version") for i in items if i.get("version")]
+        # Github repo
+        gh = meta.get("githubRepository") or {}
+        repo = f"https://github.com/{gh.get('owner')}/{gh.get('name')}" if gh.get("owner") and gh.get("name") else ""
+        # Maintainers count approximated by distinct publishers across versions
+        maint = {i.get("user", {}).get("id") for i in items if i.get("user")}
+        maint_ct = len([m for m in maint if m])
+        return {
+            "ecosystem": "jsr",
+            "name": f"@{scope}/{pkg}",
+            "latest_version": latest,
+            "description": meta.get("description", ""),
+            "license": "",  # JSR doesn't expose license at package level
+            "homepage": "",
+            "repository": repo,
+            "downloads_weekly": None,  # JSR doesn't expose downloads
+            "maintainers_count": maint_ct,
+            "deprecated": False,
+            "deprecated_message": None,
+            "first_published": meta.get("createdAt"),
+            "last_published": meta.get("updatedAt"),
+            "versions": version_names[:20],
+            "all_version_count": meta.get("versionCount", len(version_names)),
+            "dependencies": [],  # Would require fetching version-specific /versions/{v}/ graph
+            # JSR-specific enrichment exposed in health calculation + prompt text
+            "_jsr_score": meta.get("score"),
+            "_runtime_compat": meta.get("runtimeCompat") or {},
+            "_dependent_count": meta.get("dependentCount"),
+        }
+    except Exception:
+        return None
+
+
 FETCHERS = {
     "npm": fetch_npm,
     "pypi": fetch_pypi,
@@ -1634,6 +1696,7 @@ FETCHERS = {
     "cran": fetch_cran,
     "conda": fetch_conda,
     "homebrew": fetch_homebrew,
+    "jsr": fetch_jsr,
 }
 
 
