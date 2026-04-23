@@ -1908,6 +1908,176 @@ async def get_provenance(ecosystem: str, package: str):
             pass
     return {"package": package, "ecosystem": ecosystem, "available": False, "notes": "Provenance inspection not supported for this ecosystem yet."}
 
+# ============================================================================
+# MAINTAINER TRUST SCORE (public, aggregated by repo owner — differentiator)
+# ============================================================================
+
+def _maintainer_trust_score(row: dict) -> dict:
+    """Compute 0-100 trust score from aggregated maintainer_signals row.
+
+    Breakdown (max 100):
+      longevity      0-20  (account age / repo age)
+      bus_factor     0-25  (diversity of active contributors)
+      activity       0-15  (recency of pushes)
+      concentration  0-15  (inverse of single-author dominance)
+      reputation     0-10  (stars)
+      liveness       0-10  (not archived, no ownership change)
+      package_count  0-5   (number of maintained packages)
+    """
+    def clamp(x, lo, hi):
+        return max(lo, min(hi, x))
+
+    age_days = row.get("max_account_age_days") or 0
+    longevity = clamp(int(20 * min(age_days / 1825, 1)), 0, 20)  # 5yr → 20
+
+    bus = row.get("avg_bus_factor") or 1
+    bus_score = clamp(int(25 * min(bus / 5, 1)), 0, 25)  # 5+ core contribs → 25
+
+    last_push_days = row.get("days_since_last_push")
+    if last_push_days is None:
+        activity = 0
+    elif last_push_days <= 30:
+        activity = 15
+    elif last_push_days <= 90:
+        activity = 12
+    elif last_push_days <= 180:
+        activity = 7
+    elif last_push_days <= 365:
+        activity = 3
+    else:
+        activity = 0
+
+    dom = row.get("avg_primary_author_ratio") or 1
+    concentration = clamp(int(15 * (1 - dom)), 0, 15)  # dom=1 → 0, dom=0.5 → 7, dom=0 → 15
+
+    stars = row.get("max_stars") or 0
+    reputation = clamp(int(10 * min(stars / 1000, 1)), 0, 10)  # 1000+ stars → 10
+
+    liveness = 0
+    if not row.get("all_archived", False):
+        liveness += 5
+    if not row.get("any_recent_ownership_change", False):
+        liveness += 5
+
+    pkg_count = row.get("packages_maintained") or 0
+    package_count = clamp(int(5 * min(pkg_count / 10, 1)), 0, 5)
+
+    total = longevity + bus_score + activity + concentration + reputation + liveness + package_count
+    return {
+        "score": total,
+        "breakdown": {
+            "longevity": longevity,
+            "bus_factor": bus_score,
+            "activity": activity,
+            "concentration": concentration,
+            "reputation": reputation,
+            "liveness": liveness,
+            "package_count": package_count,
+        },
+    }
+
+
+@app.get("/api/maintainer/trust/{platform}/{username}", tags=["verticals"])
+async def get_maintainer_trust(platform: str, username: str):
+    """Maintainer trust score (0-100) for a GitHub-style account.
+
+    Platform: currently 'github' only (extensible). Username: the repo_owner.
+    Aggregates all packages across ecosystems where this owner maintains,
+    returns a computed trust score + breakdown + top packages.
+
+    Public, cached 6h. No PII beyond public GitHub usernames.
+    """
+    if platform.lower() not in ("github", "gh"):
+        raise HTTPException(400, "Unsupported platform (only 'github' for now)")
+    username = username.strip()
+    if not username:
+        raise HTTPException(400, "Username required")
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        agg = await conn.fetchrow(
+            """SELECT
+                 COUNT(*) AS packages_maintained,
+                 MAX(owner_account_age_days) AS max_account_age_days,
+                 AVG(bus_factor_3m) AS avg_bus_factor,
+                 AVG(primary_author_ratio) AS avg_primary_author_ratio,
+                 MAX(stars) AS max_stars,
+                 SUM(stars) AS total_stars,
+                 BOOL_AND(is_archived) AS all_archived,
+                 BOOL_OR(recent_ownership_change) AS any_recent_ownership_change,
+                 MIN(EXTRACT(EPOCH FROM (NOW() - repo_pushed_at))/86400)::int AS days_since_last_push,
+                 MAX(updated_at) AS signals_last_updated
+               FROM maintainer_signals
+               WHERE LOWER(repo_owner) = LOWER($1)""",
+            username,
+        )
+        if not agg or (agg["packages_maintained"] or 0) == 0:
+            return {
+                "platform": platform,
+                "username": username,
+                "available": False,
+                "reason": "no maintainer_signals rows for this owner — not computed yet",
+                "trust_score": None,
+            }
+
+        top_pkgs = await conn.fetch(
+            """SELECT ecosystem, package_name, stars, forks, bus_factor_3m,
+                      is_archived, updated_at
+               FROM maintainer_signals
+               WHERE LOWER(repo_owner) = LOWER($1)
+               ORDER BY stars DESC NULLS LAST LIMIT 10""",
+            username,
+        )
+        ecos = await conn.fetch(
+            """SELECT ecosystem, COUNT(*) AS n
+               FROM maintainer_signals
+               WHERE LOWER(repo_owner) = LOWER($1)
+               GROUP BY ecosystem ORDER BY n DESC""",
+            username,
+        )
+
+    agg_d = dict(agg)
+    trust = _maintainer_trust_score(agg_d)
+
+    def _risk(score: int) -> str:
+        if score >= 75: return "low"
+        if score >= 55: return "moderate"
+        if score >= 35: return "elevated"
+        return "high"
+
+    return {
+        "platform": "github",
+        "username": username,
+        "available": True,
+        "trust_score": trust["score"],
+        "risk": _risk(trust["score"]),
+        "breakdown": trust["breakdown"],
+        "aggregate": {
+            "packages_maintained": agg_d["packages_maintained"],
+            "max_account_age_days": agg_d["max_account_age_days"],
+            "avg_bus_factor": float(agg_d["avg_bus_factor"]) if agg_d["avg_bus_factor"] is not None else None,
+            "avg_primary_author_ratio": float(agg_d["avg_primary_author_ratio"]) if agg_d["avg_primary_author_ratio"] is not None else None,
+            "max_stars": agg_d["max_stars"],
+            "total_stars": agg_d["total_stars"],
+            "days_since_last_push": agg_d["days_since_last_push"],
+            "all_archived": agg_d["all_archived"],
+            "any_recent_ownership_change": agg_d["any_recent_ownership_change"],
+        },
+        "ecosystems": [{"ecosystem": r["ecosystem"], "packages": r["n"]} for r in ecos],
+        "top_packages": [
+            {
+                "ecosystem": r["ecosystem"], "package": r["package_name"],
+                "stars": r["stars"], "forks": r["forks"],
+                "bus_factor_3m": r["bus_factor_3m"],
+                "archived": r["is_archived"],
+            }
+            for r in top_pkgs
+        ],
+        "signals_last_updated": agg_d["signals_last_updated"].isoformat() if agg_d.get("signals_last_updated") else None,
+        "disclaimer": "Heuristic trust score 0-100 from repo metadata. Not a substitute for your own security review.",
+    }
+
+
 @app.get("/api/maintainers/{ecosystem}/{package:path}", tags=["packages"])
 async def get_maintainer_signals(ecosystem: str, package: str):
     """Maintainer trust signals: bus factor, primary author dominance, account age, ownership change."""
@@ -3296,15 +3466,15 @@ async def admin_sources(request: Request):
             GROUP BY source ORDER BY calls DESC
         """)
         rapidapi_users = await conn.fetch("""
-            SELECT DISTINCT ip_hash, user_agent, MAX(created_at) as last_seen
+            SELECT DISTINCT ip_address, user_agent, MAX(created_at) as last_seen
             FROM api_usage WHERE source = 'rapidapi'
-            GROUP BY ip_hash, user_agent ORDER BY last_seen DESC LIMIT 20
+            GROUP BY ip_address, user_agent ORDER BY last_seen DESC LIMIT 20
         """)
     return {
         "total": {r["source"]: r["calls"] for r in by_source},
         "today": {r["source"]: r["calls"] for r in by_source_today},
         "week": {r["source"]: r["calls"] for r in by_source_week},
-        "rapidapi_users": [{"ip_hash": r["ip_hash"], "ua": r["user_agent"][:100], "last_seen": r["last_seen"].isoformat()} for r in rapidapi_users],
+        "rapidapi_users": [{"ip": r["ip_address"], "ua": r["user_agent"][:100], "last_seen": r["last_seen"].isoformat()} for r in rapidapi_users],
     }
 
 @app.get("/openapi-gpt.json", include_in_schema=False)
@@ -3869,12 +4039,12 @@ async def admin_automation(request: Request):
         ("0 4 * * *",   "compute_intelligence",     LOG_DIR / "intelligence.log"),
         ("0 3 * * *",   "record_health_snapshot",   LOG_DIR / "health_snapshot.log"),
         ("0 10 * * 1",  "generate_weekly_report",   Path("/home/deploy/depscope/data/weekly_report.log")),
-        ("0 */6 * * *", "alerts",                   LOG_DIR / "alerts.log"),
-        ("0 */6 * * *", "preprocess",               LOG_DIR / "preprocess.log"),
-        ("0 */12 * * *", "fetch_github_stats",      LOG_DIR / "github-stats.log"),
-        ("0 6,18 * * *", "fetch_downloads",         LOG_DIR / "downloads.log"),
-        ("0 2 * * *",   "expand_db",                LOG_DIR / "expand.log"),
-        ("0 6 * * *",   "daily_report",             LOG_DIR / "report.log"),
+        ("0 */6 * * *", "alerts",                   Path("/tmp/depscope-alerts.log")),
+        ("0 */6 * * *", "preprocess",               Path("/tmp/depscope-preprocess.log")),
+        ("0 */12 * * *", "fetch_github_stats",      Path("/tmp/depscope-github-stats.log")),
+        ("0 6,18 * * *", "fetch_downloads",         Path("/tmp/depscope-downloads.log")),
+        ("0 2 * * *",   "expand_db",                Path("/tmp/depscope-expand.log")),
+        ("0 6 * * *",   "daily_report",             Path("/tmp/depscope-report.log")),
         ("0 */4 * * *", "marketing_agent",          Path("/tmp/marketing_agent.log")),
     ]
 
@@ -4054,7 +4224,7 @@ async def admin_overview(request: Request, range: str = "30d"):
                     COUNT(*)                                                AS calls,
                     COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day')
                                                                             AS calls_24h,
-                    COUNT(DISTINCT ip_hash)                              AS unique_ips,
+                    COUNT(DISTINCT ip_address)                              AS unique_ips,
                     COUNT(DISTINCT country)                                 AS unique_countries,
                     COUNT(*) FILTER (WHERE cache_hit)                       AS cache_hits,
                     COUNT(*) FILTER (WHERE status_code >= 400)              AS errors,
@@ -4229,12 +4399,12 @@ async def admin_insights(request: Request):
         suspect_rows = await conn.fetch("""
             SELECT DATE_TRUNC('hour', created_at) AS hr,
                    COUNT(*)                    AS calls,
-                   COUNT(DISTINCT ip_hash)  AS ips
+                   COUNT(DISTINCT ip_address)  AS ips
             FROM api_usage
             WHERE source = 'browser'
             GROUP BY hr
             HAVING COUNT(*) > 200
-               AND COUNT(*)::float / GREATEST(COUNT(DISTINCT ip_hash), 1) > 20
+               AND COUNT(*)::float / GREATEST(COUNT(DISTINCT ip_address), 1) > 20
             ORDER BY calls DESC LIMIT 10
         """)
         suspect_browser_hours = [
@@ -4289,7 +4459,7 @@ async def admin_timeseries(request: Request, range: str = "7d", view: str = "all
                    COUNT(*) AS calls,
                    COUNT(*) FILTER (WHERE cache_hit) AS cache_hits,
                    COUNT(*) FILTER (WHERE status_code >= 400) AS errors,
-                   COUNT(DISTINCT ip_hash) AS unique_ips,
+                   COUNT(DISTINCT ip_address) AS unique_ips,
                    COALESCE(AVG(response_time_ms)::int, 0) AS avg_ms,
                    COALESCE(
                        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time_ms)::int, 0
@@ -4414,7 +4584,7 @@ async def admin_plan_metrics(request: Request):
             "SELECT COUNT(*) FROM api_usage WHERE created_at > NOW() - INTERVAL '7 days' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent != ''"
         ) or 0
         unique_ips_30d = await conn.fetchval(
-            "SELECT COUNT(DISTINCT ip_hash) FROM api_usage WHERE created_at > NOW() - INTERVAL '30 days'"
+            "SELECT COUNT(DISTINCT ip_address) FROM api_usage WHERE created_at > NOW() - INTERVAL '30 days' AND ip_address IS NOT NULL"
         ) or 0
         users_count = await conn.fetchval("SELECT COUNT(*) FROM users") or 0
         users_by_plan = await conn.fetch(
@@ -5488,7 +5658,7 @@ async def get_savings():
     pool = await get_pool()
     async with pool.acquire() as conn:
         total_checks = await conn.fetchval(
-            "SELECT COUNT(*) FROM api_usage"
+            "SELECT COUNT(*) FROM api_usage WHERE ip_address NOT IN ('127.0.0.1','::1','10.10.0.140','10.10.0.1','91.134.4.25')"
         )
 
     tokens_without = 8500   # avg tokens per check without DepScope
@@ -6175,7 +6345,7 @@ async def intelligence_dashboard(request: Request):
         agent_breakdown = await conn.fetch("""
             SELECT COALESCE(source, 'unknown') AS source,
                    COUNT(*) AS calls,
-                   COUNT(DISTINCT ip_hash) AS unique_ips
+                   COUNT(DISTINCT ip_address) AS unique_ips
             FROM api_usage
             WHERE created_at > NOW() - INTERVAL '7 days' AND COALESCE(source, '') <> ''
             GROUP BY source
@@ -6184,7 +6354,7 @@ async def intelligence_dashboard(request: Request):
         countries = await conn.fetch("""
             SELECT country,
                    COUNT(*) AS calls,
-                   COUNT(DISTINCT ip_hash) AS unique_ips
+                   COUNT(DISTINCT ip_address) AS unique_ips
             FROM api_usage
             WHERE country IS NOT NULL AND created_at > NOW() - INTERVAL '7 days'
             GROUP BY country
@@ -6235,7 +6405,7 @@ async def intelligence_dashboard(request: Request):
         totals = await conn.fetchrow("""
             SELECT COUNT(*) AS calls_7d,
                    COUNT(DISTINCT session_id) AS sessions_7d,
-                   COUNT(DISTINCT ip_hash) AS ips_7d,
+                   COUNT(DISTINCT ip_address) AS ips_7d,
                    AVG(response_time_ms)::INT AS avg_ms_7d,
                    SUM(CASE WHEN cache_hit THEN 1 ELSE 0 END)::FLOAT
                      / GREATEST(COUNT(*),1) AS cache_hit_rate_7d
@@ -6403,7 +6573,7 @@ async def traffic_breakdown(request: Request, hours: int = 24):
     AI_UA = r"(GPTBot|OAI-SearchBot|ChatGPT-User|PerplexityBot|CCBot|ClaudeBot|anthropic-ai|Bytespider|Amazonbot|Applebot)"
     SEARCH_UA = r"(Googlebot|GoogleOther|Google-InspectionTool|Googlebot-Image|Mediapartners|Bingbot|Slurp|DuckDuckBot|Yandex|Baiduspider)"
     OTHER_BOT_UA = r"(AhrefsBot|SemrushBot|MJ12bot|DotBot|PetalBot|facebookexternalhit|Discordbot|TelegramBot|WhatsApp|Twitterbot|LinkedInBot|Pingdom|UptimeRobot|Site24x7|bot|crawl|spider)"
-    INTERNAL_IP = "FALSE"  # ip_address column dropped; internal traffic excluded at _log_usage
+    INTERNAL_IP = "(ip_address LIKE '10.10.%' OR ip_address LIKE '127.%' OR ip_address LIKE '37.182.176.%' OR ip_address LIKE '37.182.177.%' OR ip_address LIKE '91.134.4.%' OR ip_address IN ('::1','10.10.0.140','10.10.0.1','91.134.4.25'))"
 
     async with (await get_pool()).acquire() as conn:
         row = await conn.fetchrow(f"""
@@ -6478,7 +6648,7 @@ async def launch_metrics(request: Request):
         # API traffic (last 24h)
         api_24h = await conn.fetchval("SELECT COUNT(*) FROM api_usage WHERE created_at > NOW() - INTERVAL '24 hours'")
         api_total = await conn.fetchval("SELECT COUNT(*) FROM api_usage")
-        api_ips = await conn.fetchval("SELECT COUNT(DISTINCT ip_hash) FROM api_usage WHERE created_at > NOW() - INTERVAL '24 hours'")
+        api_ips = await conn.fetchval("SELECT COUNT(DISTINCT ip_address) FROM api_usage WHERE created_at > NOW() - INTERVAL '24 hours'")
 
     # GitHub (new account)
     gh_stars = gh_forks = gh_watchers = 0
