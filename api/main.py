@@ -721,6 +721,112 @@ async def admin_live(request: Request):
     )
 
 
+
+
+# ─── Real-time malicious feed (public SSE) ──────────────────────────  # PATCH_MALICIOUS_LIVE_V1
+# Pushes every new malicious-package advisory to any subscriber. NO AUTH.
+# Category-defining: competitors push daily/weekly; we push in seconds.
+
+async def publish_malicious(advisory: dict):
+    """Call this from the OpenSSF malicious ingest loop whenever a new row
+    hits the DB. Signature: {ecosystem, package, vuln_id, severity, summary,
+    published_at}. Silent on any failure."""
+    try:
+        from api.cache import get_redis
+        r = await get_redis()
+        import json as _json
+        await r.publish("depscope:malicious", _json.dumps(advisory, default=str))
+    except Exception:
+        pass
+
+
+@app.get("/api/live/malicious", tags=["discover"])
+async def live_malicious_feed(request: Request):
+    """Real-time stream of newly published malicious package advisories.
+
+    Public endpoint, no auth. Use this to wire a webhook-style supply-chain
+    monitor in any language that speaks SSE.
+
+    Events:
+      - hello: connection ack
+      - ping: every 30s to keep the connection alive
+      - advisory: {ecosystem, package, vuln_id, severity, summary, published_at}
+
+    Example (bash):
+      curl -N https://depscope.dev/api/live/malicious
+    """
+    async def event_gen():
+        from api.cache import get_redis
+        import asyncio as _aio, json as _json, time as _time
+        r = await get_redis()
+        pubsub = r.pubsub()
+        try:
+            await pubsub.subscribe("depscope:malicious")
+
+            yield f"event: hello\ndata: {_json.dumps({'ok': True, 'ts': _time.time(), 'source': 'depscope.dev', 'docs': 'https://depscope.dev/api-docs#malicious-live'})}\n\n"
+
+            # On connect, replay the last 10 known malicious advisories so the
+            # client has immediate context (not forced to wait for next event).
+            try:
+                pool = await get_pool()
+                async with pool.acquire() as conn:
+                    recent = await conn.fetch("""
+                        SELECT mp.ecosystem, mp.package_name AS package, mp.vuln_id,
+                               mp.summary, mp.published_at
+                        FROM malicious_packages mp
+                        ORDER BY mp.published_at DESC NULLS LAST, mp.id DESC
+                        LIMIT 10
+                    """)
+                    for row in reversed(recent):
+                        payload = {
+                            "ecosystem": row["ecosystem"],
+                            "package": row["package"],
+                            "vuln_id": row["vuln_id"],
+                            "summary": (row["summary"] or "")[:300],
+                            "published_at": row["published_at"].isoformat() if row["published_at"] else None,
+                            "replay": True,
+                        }
+                        yield f"event: advisory\ndata: {_json.dumps(payload, default=str)}\n\n"
+            except Exception:
+                pass
+
+            last_ping = _time.time()
+            start = _time.time()
+            while True:
+                if _time.time() - start > 1800:  # 30min max per conn
+                    yield "event: bye\ndata: {\"reason\":\"max_duration\"}\n\n"
+                    return
+                if _time.time() - last_ping > 30:
+                    yield f"event: ping\ndata: {int(_time.time())}\n\n"
+                    last_ping = _time.time()
+                try:
+                    msg = await _aio.wait_for(pubsub.get_message(ignore_subscribe_messages=True, timeout=1.0), timeout=1.5)
+                except _aio.TimeoutError:
+                    msg = None
+                if msg and msg.get("type") == "message":
+                    payload = msg.get("data")
+                    if isinstance(payload, bytes):
+                        payload = payload.decode("utf-8", "replace")
+                    yield f"event: advisory\ndata: {payload}\n\n"
+        finally:
+            try:
+                await pubsub.unsubscribe("depscope:malicious")
+                await pubsub.close()
+            except Exception:
+                pass
+
+    return _StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+            "Access-Control-Allow-Origin": "*",
+        },
+    )
+
+
 @app.post("/api/admin/unlock", include_in_schema=False)
 async def admin_unlock(request: Request):
     if not _ADMIN_PW:
