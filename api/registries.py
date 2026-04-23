@@ -715,8 +715,28 @@ async def fetch_rubygems(name: str) -> dict | None:
     }
 
 
+def _pick_gh_token() -> str | None:
+    """Pick a GitHub token from a pool (GH_TOKEN_1..5, GH_TOKEN, GITHUB_TOKEN).
+
+    Multi-token support expands effective GH quota from 5k/hr to 25k/hr.
+    Selection is time-bucketed round-robin so concurrent workers spread load.
+    """
+    import os as _os
+    import time as _time
+    pool = [
+        _os.environ.get(f"GH_TOKEN_{i}") for i in range(1, 6)
+    ]
+    pool = [t for t in pool if t]
+    single = _os.environ.get("GH_TOKEN") or _os.environ.get("GITHUB_TOKEN")
+    if single:
+        pool.append(single)
+    if not pool:
+        return None
+    return pool[int(_time.time()) % len(pool)]
+
+
 async def fetch_github_stats(repo_url: str) -> dict | None:
-    """Fetch GitHub repo stats via API. Uses GH_TOKEN (5000/h) if set, else anon (60/h)."""
+    """Fetch GitHub repo stats via API. Uses token pool (25k/h) if set, else anon (60/h)."""
     if not repo_url or "github.com" not in repo_url:
         return None
     # Extract owner/repo from URL (handles http://, https://, .git suffix, trailing slash)
@@ -726,8 +746,7 @@ async def fetch_github_stats(repo_url: str) -> dict | None:
     owner, repo = match.group(1), match.group(2)
     repo = repo.rstrip('/').removesuffix('.git') if hasattr(str, 'removesuffix') else (repo.rstrip('/')[:-4] if repo.rstrip('/').endswith('.git') else repo.rstrip('/'))
 
-    import os as _os
-    gh_token = _os.environ.get("GH_TOKEN") or _os.environ.get("GITHUB_TOKEN")
+    gh_token = _pick_gh_token()
     api_url = f"https://api.github.com/repos/{owner}/{repo}"
     try:
         async with aiohttp.ClientSession() as session:
@@ -949,8 +968,7 @@ async def fetch_swift(name: str) -> dict | None:
 
     Uses GH_TOKEN / GITHUB_TOKEN when present (5000 req/hr vs 60/hr).
     """
-    import os as _os
-    gh_token = _os.environ.get("GH_TOKEN") or _os.environ.get("GITHUB_TOKEN")
+    gh_token = _pick_gh_token()
     base_headers = {
         "Accept": "application/vnd.github+json",
         "User-Agent": "DepScope/1.0 (+https://depscope.dev)",
