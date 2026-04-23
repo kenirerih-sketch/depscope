@@ -288,19 +288,59 @@ async def enumerate_cocoapods(session) -> list[str]:
 
 
 async def enumerate_pypi(session) -> list[str]:
-    """hugovk top-pypi-packages — authoritative top N by downloads."""
-    url = "https://hugovk.github.io/top-pypi-packages/top-pypi-packages.json"
-    async with session.get(url, headers=HEADERS, timeout=HTTP_TIMEOUT) as r:
-        r.raise_for_status()
-        data = await r.json(content_type=None)
-    rows = data.get("rows") or data.get("packages") or data
-    out = []
-    if isinstance(rows, list):
-        for item in rows:
-            n = item.get("project") if isinstance(item, dict) else item
-            if n:
-                out.append(n)
-    return sorted(set(out))
+    """Top-N by downloads + PyPI Simple Index for breadth.
+
+    Phase A: hugovk top-pypi-packages (~15k authoritative by download count).
+    Phase B: PyPI Simple Index (HTML) — lists ALL ~600k pkgs. Parsed lazily
+    so we can cap at TARGET without downloading everything.
+    """
+    target = int(os.environ.get("TARGET", "50000"))
+    names: list[str] = []
+
+    # Phase A — top-pypi-packages (priority by downloads)
+    try:
+        url = "https://hugovk.github.io/top-pypi-packages/top-pypi-packages.json"
+        async with session.get(url, headers=HEADERS, timeout=HTTP_TIMEOUT) as r:
+            r.raise_for_status()
+            data = await r.json(content_type=None)
+        rows = data.get("rows") or data.get("packages") or data
+        if isinstance(rows, list):
+            for item in rows:
+                n = item.get("project") if isinstance(item, dict) else item
+                if n:
+                    names.append(n)
+        log.info(f"[enumerate_pypi] phase A (top): {len(names)}")
+    except Exception as e:
+        log.warning(f"top-pypi-packages: {e}")
+
+    if len(names) >= target:
+        return sorted(set(names))
+
+    # Phase B — PyPI Simple Index for breadth (streams HTML). Cap by TARGET.
+    try:
+        seen_set = set(names)
+        async with session.get(
+            "https://pypi.org/simple/",
+            headers={**HEADERS, "Accept": "text/html"},
+            timeout=aiohttp.ClientTimeout(total=120),
+        ) as r:
+            r.raise_for_status()
+            text = await r.text()
+        # Parse <a href="/simple/<name>/">name</a>
+        import re as _re
+        # Lines are predictable: `    <a href="/simple/requests/">requests</a>`
+        for m in _re.finditer(r'<a href="/simple/([^"/]+)/">', text):
+            n = m.group(1).strip()
+            if n and n not in seen_set:
+                names.append(n)
+                seen_set.add(n)
+                if len(names) >= target:
+                    break
+        log.info(f"[enumerate_pypi] phase B (simple-index): total {len(names)}")
+    except Exception as e:
+        log.warning(f"pypi simple index: {e}")
+
+    return sorted(set(names))
 
 
 async def enumerate_cargo(session) -> list[str]:
