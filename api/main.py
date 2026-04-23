@@ -7764,7 +7764,7 @@ async def traffic_breakdown(request: Request, hours: int = 24):
     AI_UA = r"(GPTBot|OAI-SearchBot|ChatGPT-User|PerplexityBot|CCBot|ClaudeBot|anthropic-ai|Bytespider|Amazonbot|Applebot)"
     SEARCH_UA = r"(Googlebot|GoogleOther|Google-InspectionTool|Googlebot-Image|Mediapartners|Bingbot|Slurp|DuckDuckBot|Yandex|Baiduspider)"
     OTHER_BOT_UA = r"(AhrefsBot|SemrushBot|MJ12bot|DotBot|PetalBot|facebookexternalhit|Discordbot|TelegramBot|WhatsApp|Twitterbot|LinkedInBot|Pingdom|UptimeRobot|Site24x7|bot|crawl|spider)"
-    INTERNAL_IP = "(COALESCE(user_agent, '') LIKE 'DepScope-%' OR COALESCE(user_agent, '') LIKE '%CacheWarmer%' OR COALESCE(user_agent, '') LIKE '%curl/%' OR COALESCE(user_agent, '') = '' OR agent_client IN ('crawler', 'unknown'))"
+    INTERNAL_IP = "(COALESCE(user_agent, '') LIKE 'DepScope-%' OR COALESCE(user_agent, '') LIKE '%CacheWarmer%' OR COALESCE(user_agent, '') LIKE '%curl/%' OR COALESCE(user_agent, '') = '')"
 
     async with (await get_pool()).acquire() as conn:
         row = await conn.fetchrow(f"""
