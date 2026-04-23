@@ -600,7 +600,8 @@ async def _fetch_maven_pom(group_id: str, artifact_id: str, version: str, depth:
 
         # Parent POM inheritance — resolve missing fields (license especially)
         if not out["license"] or not out["description"]:
-            parent_el = root.find("m:parent", namespaces=ns) or root.find("parent")
+            _pn = root.find("m:parent", namespaces=ns)
+            parent_el = _pn if _pn is not None else root.find("parent")
             if parent_el is not None:
                 p_group = p_artifact = p_version = ""
                 for child in parent_el:
