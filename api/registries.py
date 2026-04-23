@@ -1852,12 +1852,12 @@ async def fetch_vulnerabilities(
 
 
 def _sanitize_str(s):
-    """Strip NUL chars that SQL_ASCII cannot translate (silent ingestion loss fix)."""
+    """Coerce to str (Postgres VARCHAR) + strip NUL chars SQL_ASCII cannot translate."""
     if s is None:
         return None
-    if isinstance(s, str):
-        return s.replace("\x00", "")
-    return s
+    if not isinstance(s, str):
+        s = str(s)
+    return s.replace("\x00", "")
 
 
 import re as _re_pii
