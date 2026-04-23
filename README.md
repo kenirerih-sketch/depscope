@@ -4,21 +4,34 @@
 
 **Package Intelligence for AI Agents**
 
-One free API. 17 ecosystems. 31.000+ packages. 2.282 live vulnerabilities.
+One free API. **19 ecosystems** (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew, **JSR, Julia**). Live OSV + KEV + EPSS. CC0 Hallucination Benchmark. Real-time malicious stream.
 Built so LLM agents stop hallucinating dependencies, stop re-fetching the same JSON, and stop shipping known-vulnerable code.
 
 **LLM-optimized responses cut input tokens by ~74% vs raw registry JSON.**
 
 [![API Status](https://img.shields.io/badge/API-live-brightgreen)](https://depscope.dev)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Ecosystems](https://img.shields.io/badge/ecosystems-17-cyan)](https://depscope.dev/api-docs)
-[![Packages](https://img.shields.io/badge/indexed-31k%2B-orange)](https://depscope.dev/stats)
-[![Vulnerabilities](https://img.shields.io/badge/vulns-2.2k-red)](https://depscope.dev/api-docs)
-[![MCP Tools](https://img.shields.io/badge/MCP%20tools-29-purple)](https://www.npmjs.com/package/depscope-mcp)
+[![Ecosystems](https://img.shields.io/badge/ecosystems-19-cyan)](https://depscope.dev/api-docs)
+[![MCP Tools](https://img.shields.io/badge/MCP%20tools-22-purple)](https://www.npmjs.com/package/depscope-mcp)
 
 [Website](https://depscope.dev) · [API Docs](https://depscope.dev/api-docs) · [Swagger](https://depscope.dev/docs) · [GPT Store](https://chatgpt.com/g/g-69e02d12226c8191a7f24f3a8481bc4e-depscope) · [RapidAPI](https://rapidapi.com/depscope/api/depscope) · [npm](https://www.npmjs.com/package/depscope-mcp)
 
 </div>
+
+---
+
+## What's new (v0.7)
+
+- **19 ecosystems**: added JSR (Deno/Bun TypeScript registry) and Julia (scientific/ML).
+- **Historical Compromise KB**: seeded with canonical supply-chain incidents (event-stream@3.3.6, ua-parser-js 0.7.29, coa, rc, node-ipc ≥10.1.1, colors 1.4.44-liberty, xrpl.js, ctx, colorama typosquats, rustdecimal, ...). Surfaces in `/api/check` even when the package was unpublished.
+- **License risk classifier** on every package: `permissive` / `weak_copyleft` / `strong_copyleft` / `network_copyleft` / `proprietary` / `unknown` + commercial-use notes.
+- **Version-scoped check**: `?version=` on `/api/check`, `/api/prompt`, `/api/health`. Returns a `version_scoped` block with vulns filtered to THAT pin + a dedicated recommendation.
+- **Transitive dep walk** in `/api/scan`: `include_transitive: true` with depth limit. express@4.19 → 46 packages at depth 2.
+- **Lockfile ingestion** in `/api/scan`: 9 formats (package-lock, pnpm-lock, yarn.lock, poetry.lock, Pipfile.lock, composer.lock, Cargo.lock, requirements.txt, go.sum).
+- **SBOM export**: `format: "cyclonedx"` or `"spdx"` on `/api/scan`.
+- **Real-time malicious stream** `GET /api/live/malicious` (public SSE) — new OpenSSF advisories in seconds, not days.
+- **Hallucination Benchmark v1** (CC0) at [depscope.dev/benchmark](https://depscope.dev/benchmark) — corpus of package names that AI coding agents hallucinate, + `/api/benchmark/verify` for eval harnesses.
+- **depscope-cli** npm package: `npx depscope-cli express` — zero config, zero auth.
 
 ---
 

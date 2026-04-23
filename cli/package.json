@@ -1,7 +1,7 @@
 {
   "name": "depscope-cli",
-  "version": "0.1.0",
-  "description": "Check any package across 19 ecosystems (npm, PyPI, Cargo, Go, JSR, Julia, ...) — free, zero auth, agent-ready. One command before every install.",
+  "version": "0.3.0",
+  "description": "Check any package across 19 ecosystems (npm, PyPI, Cargo, Go, JSR, Julia, ...) \u2014 free, zero auth, agent-ready. One command before every install.",
   "bin": {
     "depscope": "./bin/depscope.js"
   },

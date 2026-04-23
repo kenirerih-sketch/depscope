@@ -1,8 +1,8 @@
 {
   "name": "depscope-mcp",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "mcpName": "io.github.cuttalo/depscope",
-  "description": "MCP server for DepScope \u2014 Package Intelligence for AI agents. 22 tools for package health, vulnerabilities, typosquats, malicious flags, alternatives, known bugs, breaking changes, compat and error-to-fix across 17 ecosystems (npm/pypi/cargo/go/maven/nuget/\u2026). Zero auth, remote URL https://mcp.depscope.dev/mcp or stdio.",
+  "description": "MCP server for DepScope \u2014 Package Intelligence for AI agents. 22 tools for package health, vulnerabilities, typosquats, malicious flags, alternatives, known bugs, breaking changes, compat and error-to-fix across 19 ecosystems (npm/pypi/cargo/go/maven/nuget/\u2026). Zero auth, remote URL https://mcp.depscope.dev/mcp or stdio. Covers JSR + Julia.",
   "main": "index.js",
   "bin": {
     "depscope-mcp": "index.js"
