@@ -2163,10 +2163,10 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
                     pop_rows = await conn.fetch("""
                         SELECT name, downloads_weekly AS dl
                         FROM packages
-                        WHERE ecosystem=$1 AND downloads_weekly > 1000000
+                        WHERE ecosystem=$1
                           AND LENGTH(name) BETWEEN LENGTH($2)-2 AND LENGTH($2)+2
-                        ORDER BY downloads_weekly DESC
-                        LIMIT 50
+                        ORDER BY (downloads_weekly IS NULL), downloads_weekly DESC, health_score DESC NULLS LAST
+                        LIMIT 100
                     """, ecosystem, package)
                     # naive distance check
                     best = None
