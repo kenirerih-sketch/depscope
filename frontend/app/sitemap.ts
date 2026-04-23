@@ -1,5 +1,23 @@
 import { MetadataRoute } from "next";
 
+// SEO normalization — strip trailing slashes + lowercase pkg/{eco}/{name}  # SEO_V1
+function _sitemap_normalize(url: string): string | null {
+  try {
+    const u = new URL(url);
+    // Strip trailing slash (not for root)
+    if (u.pathname.length > 1 && u.pathname.endsWith("/")) {
+      u.pathname = u.pathname.replace(/\/+$/, "");
+    }
+    // Lowercase /pkg/{eco}/{pkg} — registries we serve are case-insensitive
+    // so mixed-case URLs are duplicates that Google flags as "alternate page".
+    const pkgMatch = u.pathname.match(/^\/pkg\/([^/]+)\/(.+)$/);
+    if (pkgMatch) {
+      u.pathname = `/pkg/${pkgMatch[1].toLowerCase()}/${pkgMatch[2]}`;
+    }
+    return u.origin + u.pathname + u.search;
+  } catch { return url; }
+}
+
 interface QualityPackage {
   ecosystem: string;
   name: string;
@@ -251,10 +269,20 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     })
     .filter(Boolean) as MetadataRoute.Sitemap;
 
-  return [
+  const _raw = [
     ...staticPages,
     ...ecosystemPages,
     ...comparePages,
     ...packagePages,
   ];
+  // SITEMAP_POST_PROCESSED — strip trailing / + lowercase /pkg/{eco}/*
+  const _seen = new Set<string>();
+  const _out = [];
+  for (const e of _raw) {
+    const norm = _sitemap_normalize(e.url);
+    if (!norm || _seen.has(norm)) continue;
+    _seen.add(norm);
+    _out.push({ ...e, url: norm });
+  }
+  return _out;
 }

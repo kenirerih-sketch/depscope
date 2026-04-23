@@ -1,3 +1,10 @@
+
+import type { Metadata } from "next";
+export const metadata: Metadata = {
+  title: "集成指南 | DepScope",
+  alternates: { canonical: "https://depscope.dev/zh/integrate" },
+};
+
 export default function ZhIntegratePage() {
   return (
     <div className="min-h-screen p-8 max-w-3xl mx-auto">

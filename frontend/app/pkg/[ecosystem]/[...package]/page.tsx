@@ -216,7 +216,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       title,
       description,
-      url: `https://depscope.dev/pkg/${ecosystem}/${pkg}`,
+      url: `https://depscope.dev/pkg/${ecosystem.toLowerCase()}/${data?.package || pkg}`,
       siteName: "DepScope",
       type: "website",
       images: [
@@ -235,7 +235,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       images: [`https://depscope.dev/og/pkg/${ecosystem}/${pkg}`],
     },
     alternates: {
-      canonical: `https://depscope.dev/pkg/${ecosystem}/${pkg}`,
+      canonical: `https://depscope.dev/pkg/${ecosystem.toLowerCase()}/${data?.package || pkg}`,
     },
     robots: {
       index: true,

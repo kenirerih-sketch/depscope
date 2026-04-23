@@ -1,3 +1,10 @@
+
+import type { Metadata } from "next";
+export const metadata: Metadata = {
+  title: "API文档 | DepScope",
+  alternates: { canonical: "https://depscope.dev/zh/api-docs" },
+};
+
 export default function ZhApiDocsPage() {
   const endpoints = [
     {

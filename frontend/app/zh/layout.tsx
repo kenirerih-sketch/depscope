@@ -46,7 +46,6 @@ export const metadata: Metadata = {
     },
   },
   alternates: {
-    canonical: "https://depscope.dev/zh",
     languages: {
       "en": "https://depscope.dev/",
       "zh-CN": "https://depscope.dev/zh",

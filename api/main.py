@@ -1523,7 +1523,7 @@ async def _fetch_full_package(ecosystem: str, package: str, requested_version: s
             pass
 
     return {
-        "package": package,
+        "package": pkg_data.get("name") or package,
         "ecosystem": ecosystem,
         "latest_version": pkg_data.get("latest_version"),
         "description": pkg_data.get("description", ""),
