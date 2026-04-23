@@ -100,14 +100,14 @@ async def gather_stats():
 
     # Top IP (possibili abusi)
     top_ips = await conn.fetch("""
-        SELECT ip_address, COUNT(*) as cnt
+        SELECT ip_hash AS ip_hash, COUNT(*) as cnt
         FROM api_usage WHERE created_at > CURRENT_DATE
-        GROUP BY ip_address ORDER BY cnt DESC LIMIT 5
+        GROUP BY ip_hash ORDER BY cnt DESC LIMIT 5
     """)
 
     # Unique IPs today
     unique_ips = await conn.fetchval("""
-        SELECT COUNT(DISTINCT ip_address) FROM api_usage WHERE created_at > CURRENT_DATE
+        SELECT COUNT(DISTINCT ip_hash) FROM api_usage WHERE created_at > CURRENT_DATE
     """)
 
     await conn.close()
@@ -174,7 +174,7 @@ def build_html(s):
     # Top IPs
     ips_rows = ""
     for ip in s["top_ips"]:
-        ips_rows += f'<tr><td style="padding:2px 8px;color:#94a3b8;font-size:12px;font-family:monospace;">{ip["ip_address"]}</td><td style="padding:2px 8px;color:#e2e8f0;font-size:12px;text-align:right;">{ip["cnt"]}</td></tr>'
+        ips_rows += f'<tr><td style="padding:2px 8px;color:#94a3b8;font-size:12px;font-family:monospace;">{ip["ip_hash"]}</td><td style="padding:2px 8px;color:#e2e8f0;font-size:12px;text-align:right;">{ip["cnt"]}</td></tr>'
 
     return f"""
     <div style="font-family:system-ui;max-width:700px;margin:0 auto;padding:20px;background:#0a0a0f;color:#e2e8f0;">

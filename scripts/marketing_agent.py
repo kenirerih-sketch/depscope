@@ -695,7 +695,7 @@ async def collect_metrics(pool):
         ) or 0
 
         api = await conn.fetchval(
-            "SELECT COUNT(*) FROM api_usage WHERE DATE(created_at) = $1 AND ip_address NOT IN ('127.0.0.1','::1','10.10.0.140','10.10.0.1','91.134.4.25')",
+            "SELECT COUNT(*) FROM api_usage WHERE DATE(created_at) = $1 AND COALESCE(user_agent, '') NOT LIKE 'DepScope-%' AND COALESCE(user_agent, '') NOT LIKE '%CacheWarmer%'",
             today
         ) or 0
 

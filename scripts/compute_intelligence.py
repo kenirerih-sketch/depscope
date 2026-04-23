@@ -102,7 +102,7 @@ async def run():
 
         # ---- A) Infer sessions (last 48h to catch boundary) ----
         rows = await conn.fetch("""
-            SELECT session_id, ip_address, source,
+            SELECT session_id, ip_hash, source,
                    MIN(created_at) AS first_call,
                    MAX(created_at) AS last_call,
                    COUNT(*)        AS call_count,
@@ -116,7 +116,7 @@ async def run():
             FROM api_usage
             WHERE session_id IS NOT NULL
               AND created_at > NOW() - INTERVAL '48 hours'
-            GROUP BY session_id, ip_address, source
+            GROUP BY session_id, ip_hash, source
         """)
         sess_upserts = 0
         for r in rows:
@@ -125,7 +125,7 @@ async def run():
             packages = list(r["packages"] or [])
             intent = _detect_intent(endpoints)
             stack = _infer_stack(packages)
-            ip_hash = _hash_ip(r["ip_address"] or "")
+            ip_hash = r["ip_hash"] or ""
             await conn.execute("""
                 INSERT INTO api_sessions (
                     session_id, source, country, ip_hash,

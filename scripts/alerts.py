@@ -170,13 +170,13 @@ async def check_usage_anomalies():
 
         # Top IP abuse detection
         top_ip = await conn.fetchrow("""
-            SELECT ip_address, COUNT(*) as cnt FROM api_usage
+            SELECT ip_hash AS ip_hash, COUNT(*) as cnt FROM api_usage
             WHERE created_at > NOW() - INTERVAL '1 hour'
-            AND ip_address NOT IN ('127.0.0.1', '::1', '10.10.0.140', '10.10.0.1', '91.134.4.25')
-            GROUP BY ip_address ORDER BY cnt DESC LIMIT 1
+            AND COALESCE(user_agent, '') NOT LIKE 'DepScope-%' AND COALESCE(user_agent, '') NOT LIKE '%CacheWarmer%'
+            GROUP BY ip_hash ORDER BY cnt DESC LIMIT 1
         """)
         if top_ip and top_ip["cnt"] > 500:
-            alerts.append(f"Possible abuse: IP {top_ip['ip_address']} made {top_ip['cnt']} calls in 1 hour")
+            alerts.append(f"Possible abuse: IP {top_ip['ip_hash']} made {top_ip['cnt']} calls in 1 hour")
 
         await conn.close()
     except Exception as e:
