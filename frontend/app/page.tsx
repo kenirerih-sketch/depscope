@@ -238,11 +238,34 @@ function SetupSnippets() {
   );
 }
 
+interface IntelTopHallucinated {
+  ecosystem: string;
+  package: string;
+  hits: number;
+  callers: number;
+}
+
+interface IntelAgent {
+  agent: string;
+  calls: number;
+}
+
+interface IntelData {
+  hallucinations_week?: number;
+  top_hallucinated?: IntelTopHallucinated[];
+  agents_breakdown?: IntelAgent[];
+}
+
 interface StatsData {
   packages_indexed: number;
   vulnerabilities_tracked: number;
   ecosystems: string[];
+  ecosystem_counts?: Record<string, number>;
   mcp_tools?: number;
+  api_calls_today?: number;
+  api_calls_total?: number;
+  registered_users?: number;
+  intel?: IntelData;
 }
 
 const EXPLORE_CARDS = [
@@ -328,7 +351,8 @@ export default function Home() {
             <span className="text-[var(--accent)]">Ship safer code.</span>
           </h1>
           <p className="text-sm md:text-base text-[var(--text-dim)] mb-4 max-w-xl mx-auto leading-relaxed">
-            One API for package health across {stats?.ecosystems?.length || 17} ecosystems.
+            One API for package health across {stats?.ecosystems?.length || 17} ecosystems
+            {stats?.packages_indexed ? <> · <span className="tabular-nums text-[var(--text)]">{stats.packages_indexed.toLocaleString()}</span> packages</> : null}.
             Cached for every AI agent. Free, no auth.
           </p>
           <div className="flex flex-wrap justify-center gap-2 mb-8 text-xs font-mono">
@@ -394,9 +418,9 @@ export default function Home() {
             <span>·</span>
             <span className="tabular-nums"><span className="text-[var(--text-dim)]">{stats?.ecosystems?.length || 17}</span> ecosystems</span>
             <span>·</span>
-            <span className="tabular-nums"><span className="text-[var(--text-dim)]">{stats?.packages_indexed?.toLocaleString() || "14,744"}</span> packages</span>
+            <span className="tabular-nums"><span className="text-[var(--text-dim)]">{stats?.packages_indexed?.toLocaleString() || "390,000+"}</span> packages</span>
             <span>·</span>
-            <span className="tabular-nums"><span className="text-[var(--text-dim)]">{stats?.vulnerabilities_tracked ?? 402}</span> vulnerabilities</span>
+            <span className="tabular-nums"><span className="text-[var(--text-dim)]">{stats?.vulnerabilities_tracked?.toLocaleString() ?? "7,300+"}</span> vulnerabilities</span>
             <span>·</span>
             <span className="text-[var(--green)]">Free</span>
           </div>
@@ -654,7 +678,7 @@ export default function Home() {
                 <div className="grid grid-cols-2 md:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-[var(--border)]">
                   <div className="p-5">
                     <Stat
-                      value={stats?.packages_indexed?.toLocaleString() || "14,744"}
+                      value={stats?.packages_indexed?.toLocaleString() || "390,000+"}
                       label="Packages indexed"
                     />
                   </div>
@@ -667,7 +691,7 @@ export default function Home() {
                   </div>
                   <div className="p-5">
                     <Stat
-                      value={stats?.vulnerabilities_tracked?.toLocaleString() || "402"}
+                      value={stats?.vulnerabilities_tracked?.toLocaleString() || "7,300+"}
                       label="Vulnerabilities"
                       color="var(--red)"
                     />
@@ -682,6 +706,71 @@ export default function Home() {
                 </div>
               </Card>
             </Section>
+
+            {/* Live agent intel */}
+            {(stats?.intel?.hallucinations_week !== undefined ||
+              (stats?.intel?.top_hallucinated && stats.intel.top_hallucinated.length > 0) ||
+              (stats?.intel?.agents_breakdown && stats.intel.agents_breakdown.length > 0)) && (
+              <Section
+                title="Live agent intel"
+                description="What AI agents asked about this week. Aggregated, anonymous, refreshed in real time."
+              >
+                <div className="grid md:grid-cols-3 gap-3">
+                  <Card>
+                    <CardBody>
+                      <div className="text-[11px] font-mono uppercase tracking-wider text-[var(--red)] mb-2">
+                        Hallucinations · 7d
+                      </div>
+                      <div className="text-3xl font-semibold tabular-nums text-[var(--text)] mb-1">
+                        {stats?.intel?.hallucinations_week?.toLocaleString() ?? "—"}
+                      </div>
+                      <p className="text-xs text-[var(--text-dim)] leading-relaxed">
+                        Non-existent packages agents tried to install. We caught them at the door, before <code className="font-mono">npm install</code>.
+                      </p>
+                    </CardBody>
+                  </Card>
+
+                  <Card>
+                    <CardBody>
+                      <div className="text-[11px] font-mono uppercase tracking-wider text-[var(--orange)] mb-2">
+                        Top hallucinated
+                      </div>
+                      <ol className="space-y-1.5 text-xs">
+                        {(stats?.intel?.top_hallucinated ?? []).slice(0, 5).map((h, i) => (
+                          <li key={i} className="flex items-baseline justify-between gap-2">
+                            <span className="truncate font-mono text-[var(--text)]">
+                              <span className="text-[var(--text-faded)]">{h.ecosystem}/</span>{h.package}
+                            </span>
+                            <span className="tabular-nums text-[var(--text-dim)] shrink-0">
+                              {h.hits}× · {h.callers} agents
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
+                    </CardBody>
+                  </Card>
+
+                  <Card>
+                    <CardBody>
+                      <div className="text-[11px] font-mono uppercase tracking-wider text-[var(--accent)] mb-2">
+                        Who's calling · 7d
+                      </div>
+                      <ol className="space-y-1.5 text-xs">
+                        {(stats?.intel?.agents_breakdown ?? []).slice(0, 5).map((a, i) => (
+                          <li key={i} className="flex items-baseline justify-between gap-2">
+                            <span className="truncate font-mono text-[var(--text)]">{a.agent}</span>
+                            <span className="tabular-nums text-[var(--text-dim)] shrink-0">{a.calls.toLocaleString()}</span>
+                          </li>
+                        ))}
+                        {(stats?.intel?.agents_breakdown ?? []).length === 0 && (
+                          <li className="text-[var(--text-faded)]">no traffic yet this week</li>
+                        )}
+                      </ol>
+                    </CardBody>
+                  </Card>
+                </div>
+              </Section>
+            )}
 
             {/* Setup */}
             <Section
