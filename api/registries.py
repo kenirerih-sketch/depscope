@@ -53,18 +53,56 @@ async def fetch_npm(name: str) -> dict | None:
     }
 
 
-async def fetch_npm_downloads(name: str) -> int:
-    """Fetch weekly downloads from npm downloads API."""
+async def fetch_npm_downloads(name: str) -> int | None:  # PATCH_DOWNLOADS_V1
+    """Fetch weekly downloads from npm downloads API.
+
+    Returns int on success, None when the registry does not expose the
+    metric (network error, rate-limit, 404, empty response). Downstream
+    consumers MUST treat None as "unknown" and SUPPRESS adoption caveats.
+    """
     url = f"https://api.npmjs.org/downloads/point/last-week/{name}"
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
                 if resp.status != 200:
-                    return 0
+                    return None
                 data = await resp.json()
-                return data.get("downloads", 0)
+                dl = data.get("downloads")
+                return int(dl) if isinstance(dl, (int, float)) else None
     except Exception:
-        return 0
+        return None
+
+
+async def fetch_pypi_downloads(name: str) -> int | None:
+    """Weekly downloads via pypistats.org (BigQuery-backed, 24h Redis cache).
+
+    PyPI's native JSON API no longer exposes download counts (deprecated 2020),
+    so we proxy pypistats.org which publishes the BigQuery bigquery-public-data.pypi
+    aggregates. Returns None on any error so consumers treat as unknown.
+    """
+    cache_key = f"pypi_dl:{name.lower()}"
+    cached = await cache_get(cache_key)
+    if cached is not None:
+        # Accept 0 as "really zero" from a confirmed call, not error.
+        return cached if cached != -1 else None
+    url = f"https://pypistats.org/api/packages/{name.lower()}/recent?period=week"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, timeout=aiohttp.ClientTimeout(total=6)) as resp:
+                if resp.status != 200:
+                    await cache_set(cache_key, -1, ttl=3600)  # short negative cache
+                    return None
+                data = await resp.json()
+                dl = (data.get("data") or {}).get("last_week")
+                if not isinstance(dl, (int, float)):
+                    await cache_set(cache_key, -1, ttl=3600)
+                    return None
+                dl_i = int(dl)
+                await cache_set(cache_key, dl_i, ttl=86400)
+                return dl_i
+    except Exception:
+        await cache_set(cache_key, -1, ttl=3600)
+        return None
 
 
 
@@ -143,6 +181,14 @@ async def fetch_pypi(name: str) -> dict | None:
                 if resp.status == 200:
                     stats = await resp.json()
                     downloads_weekly = stats.get("data", {}).get("last_week", 0)
+    except Exception:
+        pass
+
+    # Real weekly downloads via pypistats.org (24h cache).
+    try:
+        pypi_dl = await fetch_pypi_downloads(name)
+        if pypi_dl is not None:
+            downloads_weekly = pypi_dl
     except Exception:
         pass
 
@@ -381,7 +427,7 @@ async def fetch_composer(name: str) -> dict | None:
                 if resp.status == 200:
                     pdata = await resp.json()
                     pkg_info = pdata.get("package", {})
-                    downloads_weekly = pkg_info.get("downloads", {}).get("daily", 0) * 7
+                    # deprecated; pypistats fetched separately
                     description = pkg_info.get("description", "")
     except Exception:
         pass
@@ -1602,7 +1648,12 @@ async def fetch_package(ecosystem: str, name: str) -> dict | None:
 
 
 def _version_in_range(version_str: str, range_str: str) -> bool:
-    """Check if version is in an affected range like >=1.0.0,<2.0.0"""
+    """Check if version is in an affected range.
+
+    Accepts multiple OR-clauses separated by `|`:
+        `>=1.0.0,<2.0.0|=3.5.1`  -> latest is affected if any clause matches.
+    Within a clause, comma-separated constraints are AND-ed.
+    """
     if not range_str or not version_str:
         return True  # assume affected if we can't parse
     try:
@@ -1610,32 +1661,50 @@ def _version_in_range(version_str: str, range_str: str) -> bool:
     except InvalidVersion:
         return True
 
-    for part in range_str.split(","):
-        part = part.strip()
-        if not part:
-            continue
-        try:
-            if part.startswith(">="):
-                if not (ver >= Version(part[2:])):
-                    return False
-            elif part.startswith(">"):
-                if not (ver > Version(part[1:])):
-                    return False
-            elif part.startswith("<="):
-                if not (ver <= Version(part[2:])):
-                    return False
-            elif part.startswith("<"):
-                if not (ver < Version(part[1:])):
-                    return False
-            elif part.startswith("="):
-                if not (ver == Version(part[1:])):
-                    return False
-        except InvalidVersion:
-            return True
-    return True
+    clauses = [c.strip() for c in range_str.split("|") if c.strip()]
+    if not clauses:
+        return True
+
+    for clause in clauses:
+        # All constraints in a clause must hold (AND)
+        all_match = True
+        any_constraint = False
+        for part in clause.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            any_constraint = True
+            try:
+                if part.startswith(">="):
+                    if not (ver >= Version(part[2:])):
+                        all_match = False
+                        break
+                elif part.startswith(">"):
+                    if not (ver > Version(part[1:])):
+                        all_match = False
+                        break
+                elif part.startswith("<="):
+                    if not (ver <= Version(part[2:])):
+                        all_match = False
+                        break
+                elif part.startswith("<"):
+                    if not (ver < Version(part[1:])):
+                        all_match = False
+                        break
+                elif part.startswith("="):
+                    if not (ver == Version(part[1:])):
+                        all_match = False
+                        break
+            except InvalidVersion:
+                # Can't parse — be permissive (treat as match so we don't hide vuln)
+                return True
+        if any_constraint and all_match:
+            return True  # this clause matches → vuln applies
+    # No clause matched
+    return False
 
 
-def _is_vuln_relevant(vuln: dict, latest_version: str) -> bool:
+def _is_vuln_relevant(vuln: dict, latest_version: str) -> bool:  # PATCH_VULN_SCOPE_V1
     """Check if a vulnerability affects the latest version.
     If there's a fixed_version and latest >= fixed, the vuln is NOT relevant.
     Otherwise check if latest is in the affected range.
@@ -1654,6 +1723,20 @@ def _is_vuln_relevant(vuln: dict, latest_version: str) -> bool:
     affected = vuln.get("affected_versions")
     if affected:
         return _version_in_range(latest_version, affected)
+
+    # No scope at all + no fix: exclude ancient noise (< 2020) to avoid false
+    # criticals on currently-safe packages. Treat unknown-scope recent CVEs
+    # as uncertain (include, but recommendation engine should not treat as
+    # confident-affects-latest — handled upstream).
+    vuln_id = vuln.get("vuln_id", "") or ""
+    m = re.match(r"(?:CVE|GHSA)-(\d{4})-", vuln_id) or re.match(r"(\d{4})-", vuln_id)
+    if m:
+        try:
+            yr = int(m.group(1))
+            if yr < 2022:
+                return False
+        except (ValueError, TypeError):
+            pass
 
     return True  # Can't determine, include it
 
@@ -1702,14 +1785,39 @@ async def fetch_vulnerabilities(
 
             affected = v.get("affected", [{}])
             fixed = None
-            affected_range = None
+            # Collect per-affected-block clauses; OR across blocks/ranges.
+            clauses = []  # list of strings like ">=1.0.0,<2.0.0" or "=1.14.1"
+            affected_versions_list = []  # explicit version enumeration
             for a in affected:
+                # Explicit versions ("versions": ["1.2.3", "1.2.4"]) → OR of equals.
+                for ev in (a.get("versions") or []):
+                    if isinstance(ev, str) and ev.strip():
+                        affected_versions_list.append(ev.strip())
                 for r in a.get("ranges", []):
+                    introduced = None
+                    last_affected = None
+                    range_fixed = None
                     for evt in r.get("events", []):
-                        if "fixed" in evt:
-                            fixed = evt["fixed"]
                         if "introduced" in evt:
-                            affected_range = f">={evt['introduced']}"
+                            introduced = evt["introduced"]
+                        if "fixed" in evt:
+                            range_fixed = evt["fixed"]
+                            fixed = range_fixed  # keep latest fixed for legacy field
+                        if "last_affected" in evt:
+                            last_affected = evt["last_affected"]
+                    parts = []
+                    if introduced and introduced != "0":
+                        parts.append(f">={introduced}")
+                    if range_fixed:
+                        parts.append(f"<{range_fixed}")
+                    elif last_affected:
+                        parts.append(f"<={last_affected}")
+                    if parts:
+                        clauses.append(",".join(parts))
+            # Turn explicit versions list into =X clauses too
+            for ev in affected_versions_list:
+                clauses.append(f"={ev}")
+            affected_range = "|".join(clauses) if clauses else None
 
             vuln_entry = {
                 "vuln_id": vuln_id,

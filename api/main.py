@@ -192,6 +192,357 @@ app.add_middleware(
 # Agents save ~60-80% bytes on /api/check (2.8KB -> ~900B).
 app.add_middleware(GZipMiddleware, minimum_size=500, compresslevel=6)
 
+# ─── License risk classifier ──────────────────────────────────────  # PATCH_LICENSE_RISK_V1
+# Maps raw SPDX-ish license strings to a single-word risk class plus
+# a short note agents can quote when assessing commercial use. Covers
+# ~99% of npm / PyPI / GitHub licenses. Anything unrecognised returns
+# ("unknown", "verify manually — license not parseable") so the agent
+# never silently defaults to "permissive".
+
+_LICENSE_RISK_RULES = [
+    # (regex-anchored lower-cased match, risk_class, notes)
+    # Strong copyleft (affects derivative/static linking)
+    (re.compile(r"^(gpl[-_ ]?(v?2|2\.0))$"), "strong_copyleft",
+        "GPL-2.0: derivative works must release source under GPL; static linking forces disclosure."),
+    (re.compile(r"^(gpl[-_ ]?(v?3|3\.0)?)$"), "strong_copyleft",
+        "GPL-3.0: derivative works must release source under GPL; includes explicit patent grant."),
+    (re.compile(r"^(epl[-_ ]?(1|1\.0|2|2\.0))$"), "weak_copyleft",
+        "EPL: weak copyleft with a patent grant; modified files must be released under EPL."),
+    # Weak copyleft (affects modified files only)
+    (re.compile(r"^(lgpl[-_ ]?(v?2|2\.0|2\.1|v?3|3\.0))$"), "weak_copyleft",
+        "LGPL: dynamic linking from closed-source is OK; static linking triggers source disclosure."),
+    (re.compile(r"^(mpl[-_ ]?(1\.1|2|2\.0))$"), "weak_copyleft",
+        "MPL-2.0: only modified MPL files must be released; commercial closed-source around it is fine."),
+    (re.compile(r"^(cddl[-_ ]?(1\.0|1\.1))$"), "weak_copyleft",
+        "CDDL: file-level weak copyleft; linking with closed code OK, modifications must be released."),
+    # Network copyleft (SaaS trigger)
+    (re.compile(r"^(agpl[-_ ]?(v?3|3\.0)?)$"), "network_copyleft",
+        "AGPL-3.0: blocks closed-source SaaS — network use = distribution. Requires source disclosure to users."),
+    (re.compile(r"^(sspl[-_ ]?(1|1\.0))$"), "network_copyleft",
+        "SSPL: MongoDB-style — using as a service to third parties requires releasing ALL surrounding infra under SSPL."),
+    (re.compile(r"^(osl[-_ ]?(v?3|3\.0))$"), "network_copyleft",
+        "OSL-3.0: weak-to-strong copyleft with network provision — external deployment triggers source disclosure."),
+    # Permissive (commercial safe)
+    (re.compile(r"^(mit|mit[-_ ]?0|isc|bsd[-_ ]?(2|2-clause|3|3-clause|4|4-clause)|apache[-_ ]?(2|2\.0|v2)|unlicense|wtfpl|cc0(-1\.0)?|0bsd|blueoak[-_ ]?1\.0\.0|zlib|(bsd-)?(0bsd)?|x11|boost[-_ ]?1\.0|artistic[-_ ]?2|ms[-_ ]?pl|ms[-_ ]?rl|upl[-_ ]?1\.0|python[-_ ]?2\.0|psf[-_ ]?2\.0|cal[-_ ]?1\.0|afl[-_ ]?3\.0)$"),
+        "permissive",
+        "Permissive: commercial closed-source use OK; preserve the copyright notice."),
+    # Proprietary / restricted
+    (re.compile(r"^(see\s+license|proprietary|commercial|custom|closed|sspl[-_ ]?commercial)$"), "proprietary",
+        "Proprietary / custom license — do NOT use in commercial products without reviewing terms."),
+    (re.compile(r"^(nosl|nolicense|unlicensed|none)$"), "proprietary",
+        "No license declared — legally no right to use, modify, or distribute. Treat as proprietary."),
+    # Common aliases for Apache-2
+    (re.compile(r"^apache([-_ ]?license)?[-_ ]?2(\.0)?$"), "permissive",
+        "Apache-2.0: permissive, includes explicit patent grant."),
+    # BSD variations
+    (re.compile(r"^bsd$"), "permissive",
+        "BSD (unspecified clause count — likely 3-Clause): permissive, commercial safe."),
+]
+
+_LICENSE_UNKNOWN = (
+    "unknown",
+    "verify manually — license not parseable / not declared.",
+)
+
+
+def _classify_license(raw: str | None) -> dict:
+    """Return {license_id, license_risk, commercial_use_notes}."""
+    if not raw:
+        return {
+            "license_id": None,
+            "license_risk": "unknown",
+            "commercial_use_notes": "No license declared in registry metadata — verify manually before commercial use.",
+        }
+    s = str(raw).strip()
+    s_lower = s.lower()
+    # Strip common SPDX-expression wrappers: "(MIT OR Apache-2.0)"
+    # For OR-expressions, take the most permissive branch; for AND, take the most restrictive.
+    # For simplicity we try the whole string first, then each token.
+    candidates = [s_lower]
+    for sep in (" or ", " and ", "/", ","):
+        if sep in s_lower:
+            candidates.extend(t.strip().strip("()") for t in s_lower.split(sep))
+    # Dedup
+    seen = set()
+    candidates = [c for c in candidates if c and not (c in seen or seen.add(c))]
+
+    for c in candidates:
+        c_norm = c.replace(" license", "").strip()
+        for pattern, risk, notes in _LICENSE_RISK_RULES:
+            if pattern.match(c_norm):
+                return {
+                    "license_id": s,
+                    "license_risk": risk,
+                    "commercial_use_notes": notes,
+                }
+    return {
+        "license_id": s,
+        "license_risk": _LICENSE_UNKNOWN[0],
+        "commercial_use_notes": _LICENSE_UNKNOWN[1],
+    }
+
+# ─── Lockfile parsing + SBOM export (scan_project enhancements) ─  # PATCH_SCAN_ENHANCE_V1
+# Flat {name: version} extraction for 9 lockfile formats. Transitive
+# deps are ALREADY in these files (that's the whole point of a lock),
+# so parsing them gives us the full dep graph without walking.
+
+def _parse_lockfile(content: str, kind: str) -> tuple[dict, str]:
+    """Return (packages_dict, detected_ecosystem). Raises ValueError on parse error."""
+    import json as _json
+    import re as _re
+
+    kind = (kind or "").lower().strip()
+    content = content.strip()
+
+    # Auto-detect from content
+    if not kind:
+        if content.startswith("{") and '"lockfileVersion"' in content[:500]:
+            kind = "package-lock.json"
+        elif content.startswith("{") and '"python_version"' in content[:500]:
+            kind = "Pipfile.lock"
+        elif content.startswith("lockfileVersion:"):
+            kind = "pnpm-lock.yaml"
+        elif "# This file is automatically @generated by Cargo" in content[:200]:
+            kind = "Cargo.lock"
+        elif content.startswith("# poetry.lock") or "[[package]]" in content[:200] and "poetry" in content.lower():
+            kind = "poetry.lock"
+        elif "composer.json has been updated" in content[:1000] or '"packages":' in content[:500] and '"_readme"' in content[:200]:
+            kind = "composer.lock"
+        elif _re.match(r"^[a-zA-Z0-9_-]+==[0-9]", content):
+            kind = "requirements.txt"
+        elif content.startswith("# yarn lockfile"):
+            kind = "yarn.lock"
+        elif _re.match(r"^[^\s/]+/[^\s/]+ v[0-9]", content):
+            kind = "go.sum"
+        else:
+            raise ValueError("Could not auto-detect lockfile format — pass lockfile_kind explicitly.")
+
+    pkgs: dict = {}
+    eco = ""
+
+    if kind in ("package-lock.json", "npm-shrinkwrap.json"):
+        eco = "npm"
+        data = _json.loads(content)
+        for key, info in (data.get("packages") or {}).items():
+            # key like "node_modules/express", "node_modules/lodash" (lockfileVersion 2/3)
+            if not key or not key.startswith("node_modules/"):
+                continue
+            name = key[len("node_modules/"):]
+            # Handle nested (node_modules/foo/node_modules/bar) - take the last segment after node_modules
+            if "/node_modules/" in name:
+                name = name.split("/node_modules/")[-1]
+            ver = info.get("version")
+            if name and ver:
+                pkgs[name] = ver
+        # lockfileVersion 1 fallback: dependencies map
+        if not pkgs:
+            for name, info in (data.get("dependencies") or {}).items():
+                ver = info.get("version") if isinstance(info, dict) else None
+                if name and ver:
+                    pkgs[name] = ver
+
+    elif kind == "pnpm-lock.yaml":
+        eco = "npm"
+        for line in content.splitlines():
+            m = _re.match(r"^\s*/([^/@]+(?:/[^/@]+)?)@([^\(\s:]+)[\s:]", line)
+            if m:
+                name, ver = m.group(1), m.group(2)
+                pkgs[name] = ver
+
+    elif kind == "yarn.lock":
+        eco = "npm"
+        cur_name = None
+        for raw in content.splitlines():
+            line = raw.rstrip()
+            if line.startswith('"') and "@" in line and line.endswith(':'):
+                # "express@^4.17.0", "express@~4.18.0":
+                first = line.split('"', 2)[1]
+                at_idx = first.rfind('@')
+                cur_name = first[:at_idx] if at_idx > 0 else first
+            elif cur_name and line.strip().startswith('version '):
+                ver = line.strip().split(' ', 1)[1].strip('"\'')
+                pkgs[cur_name] = ver
+                cur_name = None
+
+    elif kind == "poetry.lock":
+        eco = "pypi"
+        cur = {}
+        for raw in content.splitlines():
+            line = raw.strip()
+            if line == "[[package]]":
+                if cur.get("name") and cur.get("version"):
+                    pkgs[cur["name"]] = cur["version"]
+                cur = {}
+            elif line.startswith("name ="):
+                cur["name"] = line.split("=", 1)[1].strip().strip('"')
+            elif line.startswith("version ="):
+                cur["version"] = line.split("=", 1)[1].strip().strip('"')
+        if cur.get("name") and cur.get("version"):
+            pkgs[cur["name"]] = cur["version"]
+
+    elif kind == "Pipfile.lock":
+        eco = "pypi"
+        data = _json.loads(content)
+        for section in ("default", "develop"):
+            for name, info in (data.get(section) or {}).items():
+                ver = info.get("version", "").lstrip("=")
+                if name and ver:
+                    pkgs[name] = ver
+
+    elif kind == "requirements.txt":
+        eco = "pypi"
+        for raw in content.splitlines():
+            line = raw.split("#", 1)[0].strip()
+            if not line or line.startswith("-"):
+                continue
+            m = _re.match(r"^([A-Za-z0-9_.\-]+)\s*==\s*([A-Za-z0-9_.+\-]+)", line)
+            if m:
+                pkgs[m.group(1)] = m.group(2)
+
+    elif kind == "composer.lock":
+        eco = "composer"
+        data = _json.loads(content)
+        for section in ("packages", "packages-dev"):
+            for entry in (data.get(section) or []):
+                name = entry.get("name")
+                ver = (entry.get("version") or "").lstrip("v")
+                if name and ver:
+                    pkgs[name] = ver
+
+    elif kind == "Cargo.lock":
+        eco = "cargo"
+        cur = {}
+        for raw in content.splitlines():
+            line = raw.strip()
+            if line == "[[package]]":
+                if cur.get("name") and cur.get("version"):
+                    pkgs[cur["name"]] = cur["version"]
+                cur = {}
+            elif line.startswith("name = "):
+                cur["name"] = line.split("=", 1)[1].strip().strip('"')
+            elif line.startswith("version = "):
+                cur["version"] = line.split("=", 1)[1].strip().strip('"')
+        if cur.get("name") and cur.get("version"):
+            pkgs[cur["name"]] = cur["version"]
+
+    elif kind == "go.sum":
+        eco = "go"
+        for raw in content.splitlines():
+            parts = raw.split()
+            if len(parts) >= 2:
+                name, ver = parts[0], parts[1]
+                # drop /go.mod suffix from version
+                if "/go.mod" in ver:
+                    continue
+                pkgs[name] = ver.lstrip("v")
+
+    else:
+        raise ValueError(f"Unsupported lockfile kind: {kind}")
+
+    return pkgs, eco
+
+
+def _build_sbom_cyclonedx(audit: list, ecosystem: str, total_vulns: int, project_risk: str) -> dict:
+    """Emit a minimal CycloneDX 1.5 JSON SBOM."""
+    import hashlib, uuid
+    ECO_TO_PURL = {
+        "npm": "npm", "pypi": "pypi", "cargo": "cargo", "go": "golang",
+        "composer": "composer", "maven": "maven", "nuget": "nuget",
+        "rubygems": "gem", "pub": "pub", "hex": "hex", "swift": "swift",
+        "cocoapods": "cocoapods", "cpan": "cpan", "hackage": "hackage",
+        "cran": "cran", "conda": "conda", "homebrew": "generic",
+    }
+    purl_eco = ECO_TO_PURL.get(ecosystem, ecosystem)
+    components = []
+    vulns_list = []
+    serial = f"urn:uuid:{uuid.uuid4()}"
+    for p in audit:
+        if p.get("error"):
+            continue
+        name = p["package"]
+        ver = p.get("requested_version") or p.get("latest_version") or "unknown"
+        purl = f"pkg:{purl_eco}/{name}@{ver}"
+        bom_ref = hashlib.sha256(purl.encode()).hexdigest()[:16]
+        components.append({
+            "bom-ref": bom_ref,
+            "type": "library",
+            "name": name,
+            "version": ver,
+            "purl": purl,
+            "licenses": [{"license": {"id": p["license"]}}] if p.get("license") else [],
+            "properties": [
+                {"name": "depscope:health_score", "value": str(p.get("health_score"))},
+                {"name": "depscope:recommendation", "value": str(p.get("recommendation"))},
+            ],
+        })
+        v = p.get("vulnerabilities") or {}
+        if v.get("critical", 0) or v.get("high", 0):
+            vulns_list.append({
+                "bom-ref": f"vuln-{bom_ref}",
+                "affects": [{"ref": bom_ref}],
+                "ratings": [{"severity": "critical" if v.get("critical") else "high"}],
+                "description": f"{v.get('count',0)} open — {v.get('critical',0)} critical, {v.get('high',0)} high",
+            })
+    import datetime as _dt
+    return {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "serialNumber": serial,
+        "version": 1,
+        "metadata": {
+            "timestamp": _dt.datetime.utcnow().isoformat() + "Z",
+            "tools": [{"vendor": "DepScope", "name": "scan", "version": "1.0"}],
+            "properties": [
+                {"name": "depscope:ecosystem", "value": ecosystem},
+                {"name": "depscope:total_vulns", "value": str(total_vulns)},
+                {"name": "depscope:project_risk", "value": project_risk},
+            ],
+        },
+        "components": components,
+        "vulnerabilities": vulns_list,
+    }
+
+
+def _build_sbom_spdx(audit: list, ecosystem: str) -> dict:
+    """Emit a minimal SPDX 2.3 JSON SBOM."""
+    import hashlib, datetime as _dt, uuid
+    ECO_TO_PURL = {"npm": "npm", "pypi": "pypi", "cargo": "cargo", "go": "golang"}
+    purl_eco = ECO_TO_PURL.get(ecosystem, ecosystem)
+    packages_sp = []
+    for p in audit:
+        if p.get("error"):
+            continue
+        name = p["package"]
+        ver = p.get("requested_version") or p.get("latest_version") or "unknown"
+        spdx_id = "SPDXRef-" + hashlib.sha256(f"{name}@{ver}".encode()).hexdigest()[:16]
+        packages_sp.append({
+            "SPDXID": spdx_id,
+            "name": name,
+            "versionInfo": ver,
+            "downloadLocation": f"pkg:{purl_eco}/{name}@{ver}",
+            "licenseConcluded": p.get("license") or "NOASSERTION",
+            "licenseDeclared": p.get("license") or "NOASSERTION",
+            "filesAnalyzed": False,
+            "supplier": "NOASSERTION",
+        })
+    return {
+        "spdxVersion": "SPDX-2.3",
+        "dataLicense": "CC0-1.0",
+        "SPDXID": "SPDXRef-DOCUMENT",
+        "name": f"depscope-scan-{ecosystem}",
+        "documentNamespace": f"https://depscope.dev/sbom/{uuid.uuid4()}",
+        "creationInfo": {
+            "creators": ["Tool: DepScope-1.0"],
+            "created": _dt.datetime.utcnow().isoformat() + "Z",
+        },
+        "packages": packages_sp,
+    }
+
+
+
+
+
+
 # ─── Origin Cache-Control headers (CF honours them) ─────────────────
 # Static/immutable-ish GETs keyed on ecosystem/package: 1h at edge,
 # stale-while-revalidate another 6h so agents NEVER wait on a refresh.
@@ -594,7 +945,7 @@ async def root():
     }
 
 
-async def _fetch_full_package(ecosystem: str, package: str) -> dict | None:
+async def _fetch_full_package(ecosystem: str, package: str, requested_version: str | None = None) -> dict | None:
     """Internal helper: fetch package + vulns + health, save to DB, return full result.
 
     Optimised for <2s cache miss: the heavy external calls (registry, OSV, GitHub,
@@ -690,6 +1041,31 @@ async def _fetch_full_package(ecosystem: str, package: str) -> dict | None:
 
     recommendation = _build_recommendation(pkg_data, health, vulns)
 
+    # License risk classification (post-rec so it doesn't affect recommendation)
+    _lic_info = _classify_license(pkg_data.get("license"))
+
+    # Version-scoped re-evaluation (if the caller pinned a specific version).  # PATCH_VERSION_PARAM_V1
+    # `vulns` above is filtered against `latest_version`. If the agent asked
+    # about a pinned version, re-fetch the unfiltered list and re-filter.
+    scoped_vulns = None
+    scoped_recommendation = None
+    if requested_version and requested_version != pkg_data.get("latest_version"):
+        try:
+            # Unfiltered vuln fetch: pass latest_version=None
+            all_vulns = await fetch_vulnerabilities(ecosystem, package, latest_version=None,
+                                                   repository=pkg_data.get("repository") or None)
+            from api.registries import _is_vuln_relevant
+            scoped_vulns = [v for v in all_vulns if _is_vuln_relevant(v, requested_version)]
+            scoped_health = calculate_health_score(pkg_data, scoped_vulns, github=github_stats)
+            scoped_recommendation = _build_recommendation(
+                {**pkg_data, "latest_version": requested_version},
+                scoped_health, scoped_vulns,
+            )
+        except Exception:
+            scoped_vulns = None
+            scoped_recommendation = None
+
+
     # --- Insufficient-data alignment: when the recommender downgrades to
     # "insufficient_data" (ecosystems with poor metadata — Hackage, CPAN, CRAN...)
     # the raw health score computed from those empty signals is misleading
@@ -701,6 +1077,55 @@ async def _fetch_full_package(ecosystem: str, package: str) -> dict | None:
             "risk": "unknown",
             "note": "Insufficient data to compute reliable score",
         }
+
+    # Historical compromise KB — check against current + requested version.  # PATCH_HIST_COMPROMISE_V1
+    hist_compromise_info = None
+    try:
+        async with (await get_pool()).acquire() as conn:
+            hc_rows = await conn.fetch("""
+                SELECT affected_versions, incident_type, year, summary, refs
+                FROM historical_compromises
+                WHERE ecosystem=$1 AND LOWER(package_name)=LOWER($2)
+            """, ecosystem, package)
+            if hc_rows:
+                from api.registries import _version_in_range
+                latest_v = pkg_data.get("latest_version") or ""
+                candidate_vs = [latest_v]
+                if requested_version:
+                    candidate_vs.append(requested_version)
+                incidents = []
+                any_current_match = False
+                for row in hc_rows:
+                    matches_current = any(
+                        _version_in_range(cv, row["affected_versions"])
+                        for cv in candidate_vs if cv
+                    )
+                    if matches_current:
+                        any_current_match = True
+                    incidents.append({
+                        "affected_versions": row["affected_versions"],
+                        "incident_type": row["incident_type"],
+                        "year": row["year"],
+                        "summary": row["summary"],
+                        "refs": [u for u in (row["refs"] or "").split(";") if u],
+                        "matches_current_version": matches_current,
+                    })
+                hist_compromise_info = {
+                    "count": len(incidents),
+                    "matches_current_version": any_current_match,
+                    "incidents": incidents,
+                }
+                if any_current_match:
+                    # Override recommendation — HARD block.
+                    recommendation = {
+                        "action": "do_not_use",
+                        "issues": [f"Historical compromise KB matches current version ({len(incidents)} incident(s))"],
+                        "use_version": None,
+                        "version_hint": "Check /api/versions for a safe release",
+                        "summary": f"{package}: version matches a known historical supply-chain compromise. DO NOT install.",
+                    }
+    except Exception:
+        pass
 
     # Always expose curated alternatives when we have them — agents save a
     # round-trip, and the seed data is explicit about when each alt fits.
@@ -748,6 +1173,8 @@ async def _fetch_full_package(ecosystem: str, package: str) -> dict | None:
         "latest_version": pkg_data.get("latest_version"),
         "description": pkg_data.get("description", ""),
         "license": pkg_data.get("license", ""),
+        "license_risk": _lic_info["license_risk"],
+        "commercial_use_notes": _lic_info["commercial_use_notes"],
         "homepage": pkg_data.get("homepage", ""),
         "repository": pkg_data.get("repository", ""),
         "downloads_weekly": pkg_data.get("downloads_weekly", 0),
@@ -777,7 +1204,23 @@ async def _fetch_full_package(ecosystem: str, package: str) -> dict | None:
         "bundle": bundle,
         "typescript": typescript,
         "known_issues": known_issues,
+        "historical_compromise": hist_compromise_info,
         "recommendation": recommendation,
+        "version_scoped": (
+            {
+                "version": requested_version,
+                "vulnerabilities": {
+                    "count": len(scoped_vulns or []),
+                    "critical": sum(1 for v in (scoped_vulns or []) if v.get("severity") == "critical"),
+                    "high": sum(1 for v in (scoped_vulns or []) if v.get("severity") == "high"),
+                    "medium": sum(1 for v in (scoped_vulns or []) if v.get("severity") == "medium"),
+                    "low": sum(1 for v in (scoped_vulns or []) if v.get("severity") == "low"),
+                    "details": (scoped_vulns or [])[:10],
+                },
+                "recommendation": scoped_recommendation,
+            }
+            if scoped_recommendation is not None else None
+        ),
     }
 
 
@@ -1192,7 +1635,7 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
             "_powered_by": "depscope.dev — stdlib hint",
         }
 
-    cache_key = f"check:{ecosystem}:{package}"
+    cache_key = f"check:{ecosystem}:{package}:{version or 'latest'}"
     cached = await cache_get(cache_key)
     if cached:
         cached["_cache"] = "hit"
@@ -1202,7 +1645,7 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
                    status_code=200, endpoint="check")
         return cached
 
-    result = await _fetch_full_package(ecosystem, package)
+    result = await _fetch_full_package(ecosystem, package, requested_version=version)
     if not result:
         _log_usage(ecosystem, package, request,
                    response_time_ms=int((time.time() - start) * 1000),
@@ -1568,7 +2011,7 @@ def _build_prompt_text(result: dict, cache_age_minutes: int | None = None) -> st
 
 
 @app.get("/api/prompt/{ecosystem}/{package:path}", tags=["packages"])
-async def get_prompt(ecosystem: str, package: str, request: Request = None):
+async def get_prompt(ecosystem: str, package: str, version: str = None, request: Request = None):
     """LLM-optimized plain-text context for a package.
 
     Token-efficient, decision-ready, ~500 tokens. Use this from AI agents
@@ -1583,7 +2026,7 @@ async def get_prompt(ecosystem: str, package: str, request: Request = None):
             media_type="text/plain; charset=utf-8",
         )
 
-    cache_key = f"prompt:{ecosystem}:{package}"
+    cache_key = f"prompt:{ecosystem}:{package}:{version or 'latest'}"
     cached = await cache_get(cache_key)
     if cached and isinstance(cached, dict) and "text" in cached:
         age_min = max(0, int((time.time() - cached.get("ts", time.time())) / 60))
@@ -1603,7 +2046,7 @@ async def get_prompt(ecosystem: str, package: str, request: Request = None):
             headers={"X-Cache": "hit", "X-Response-Ms": str(rt_ms)},
         )
 
-    result = await _fetch_full_package(ecosystem, package)
+    result = await _fetch_full_package(ecosystem, package, requested_version=version)
     if not result:
         _log_usage(ecosystem, package, request,
                    response_time_ms=int((time.time() - start) * 1000),
@@ -1621,7 +2064,19 @@ async def get_prompt(ecosystem: str, package: str, request: Request = None):
     except Exception:
         pass
 
-    text = _build_prompt_text(result, cache_age_minutes=None)
+    # If a pinned version was requested, render the prompt from the
+    # version-scoped view (axios@0.21.1 shows ITS vulns, not latest's).
+    if version and (result.get("version_scoped") or {}).get("recommendation") is not None:
+        vs = result["version_scoped"]
+        result_for_prompt = {
+            **result,
+            "latest_version": version,  # agent asked about this version
+            "vulnerabilities": vs["vulnerabilities"],
+            "recommendation": vs["recommendation"],
+        }
+        text = _build_prompt_text(result_for_prompt, cache_age_minutes=None)
+    else:
+        text = _build_prompt_text(result, cache_age_minutes=None)
     await cache_set(cache_key, {"text": text, "ts": time.time()}, ttl=21600)  # 6h
     rt_ms = int((time.time() - start) * 1000)
     _log_usage(ecosystem, package, request, response_time_ms=rt_ms,
@@ -1634,14 +2089,14 @@ async def get_prompt(ecosystem: str, package: str, request: Request = None):
 
 
 @app.get("/api/health/{ecosystem}/{package:path}", tags=["packages"])
-async def get_health(ecosystem: str, package: str):
+async def get_health(ecosystem: str, package: str, version: str = None):
     """Health score (0-100) + breakdown only — cheaper than /api/check.
 
     Runs the same scoring logic as /api/check but returns just the score object
     (no alternatives, no recommendation narrative). Useful for badges/dashboards.
     """
     ecosystem = ecosystem.lower()
-    cache_key = f"health:{ecosystem}:{package}"
+    cache_key = f"health:{ecosystem}:{package}:{version or 'latest'}"
     cached = await cache_get(cache_key)
     if cached:
         return cached
@@ -1649,8 +2104,16 @@ async def get_health(ecosystem: str, package: str):
     if not pkg_data:
         raise HTTPException(404, f"Package '{package}' not found in {ecosystem}")
     latest_version = pkg_data.get("latest_version", "")
-    vulns = await fetch_vulnerabilities(ecosystem, package, latest_version=latest_version)
+    effective_version = version or latest_version
+    # Fetch unfiltered when version is pinned so we can filter against it
+    if version and version != latest_version:
+        all_vulns = await fetch_vulnerabilities(ecosystem, package, latest_version=None)
+        from api.registries import _is_vuln_relevant
+        vulns = [v for v in all_vulns if _is_vuln_relevant(v, effective_version)]
+    else:
+        vulns = await fetch_vulnerabilities(ecosystem, package, latest_version=latest_version)
     result = calculate_health_score(pkg_data, vulns)
+    result["version"] = effective_version
     await cache_set(cache_key, result, ttl=3600)
     return result
 
@@ -2750,7 +3213,12 @@ async def compare_packages(ecosystem: str, packages_csv: str, request: Request =
     # An agent reading only "winner" must still see the structural risks.
     caveats: dict[str, list[str]] = {}
     if valid:
-        max_dl = max(p.get("downloads_weekly", 0) for p in valid) or 1
+        # Only compute adoption caveat when at least one package has REAL data.
+        # When downloads are None/0 for all, registry can't tell us — skip caveat
+        # entirely to avoid agents reading "low adoption" on mature packages.  # PATCH_DOWNLOADS_V1
+        dls = [p.get("downloads_weekly") for p in valid]
+        real_dls = [d for d in dls if isinstance(d, (int, float)) and d > 0]
+        max_dl = max(real_dls) if real_dls else None
         max_deps = max(p.get("dependencies_count", 0) for p in valid)
         for p in valid:
             issues: list[str] = []
@@ -2758,9 +3226,9 @@ async def compare_packages(ecosystem: str, packages_csv: str, request: Request =
                 issues.append("deprecated_in_registry")
             if p.get("maintainers_count", 0) <= 1:
                 issues.append("bus_factor_le_1 (single declared maintainer)")
-            dl = p.get("downloads_weekly", 0) or 0
-            if dl < max_dl / 10:
-                issues.append(f"low_relative_adoption ({dl:,} vs winner's downloads)")
+            dl = p.get("downloads_weekly")
+            if max_dl is not None and isinstance(dl, (int, float)) and dl > 0 and dl < max_dl / 10:
+                issues.append(f"low_relative_adoption ({dl:,} vs most_downloaded {max_dl:,})")
             if max_deps and p.get("dependencies_count", 0) > max(2 * max_deps // 3, 5) and p["package"] != winner:
                 issues.append(f"higher_transitive_deps ({p['dependencies_count']})")
             if p.get("vulns_critical", 0) > 0 or p.get("vulns_high", 0) > 0:
@@ -2796,8 +3264,29 @@ async def scan_dependencies(request: Request):
     """
     start = time.time()
     body = await request.json()
-    packages = body.get("packages", {})
-    ecosystem = body.get("ecosystem", "npm").lower()
+
+    # --- Lockfile parsing ----------------------------------------------
+    # If the caller sent a lockfile string instead of an explicit packages
+    # dict, parse it. `lockfile_kind` is optional (auto-detected when missing).
+    lockfile_content = body.get("lockfile")
+    lockfile_kind = body.get("lockfile_kind")
+    packages = body.get("packages", {}) or {}
+    ecosystem = (body.get("ecosystem") or "npm").lower()
+
+    if lockfile_content and not packages:
+        try:
+            pkgs_from_lock, detected_eco = _parse_lockfile(lockfile_content, lockfile_kind or "")
+            packages = pkgs_from_lock
+            if not body.get("ecosystem") and detected_eco:
+                ecosystem = detected_eco
+        except ValueError as e:
+            raise HTTPException(400, f"lockfile parse error: {e}")
+
+    # `format` controls output: native (default), cyclonedx, spdx.
+    output_format = (body.get("format") or "native").lower()
+    if output_format not in ("native", "cyclonedx", "spdx"):
+        raise HTTPException(400, "format must be one of: native, cyclonedx, spdx")
+    include_transitive = bool(body.get("include_transitive"))
 
     if ecosystem not in ("npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew"):
         raise HTTPException(400, f"Unsupported ecosystem: {ecosystem}")
@@ -2877,6 +3366,8 @@ async def scan_dependencies(request: Request):
                 "high": high,
             },
             "deprecated": result["metadata"]["deprecated"],
+            "license": result.get("license") or None,
+            "downloads_weekly": result.get("downloads_weekly"),
             "recommendation": result["recommendation"]["action"],
         })
 
@@ -2889,6 +3380,21 @@ async def scan_dependencies(request: Request):
         project_risk = "moderate"
     else:
         project_risk = "low"
+
+    # SBOM output branch — when caller asks for cyclonedx/spdx we emit that  # PATCH_SCAN_ENHANCE_V1
+    # format directly instead of the native audit dict.
+    if output_format == "cyclonedx":
+        sbom = _build_sbom_cyclonedx(audit, ecosystem, total_vulns, project_risk)
+        _log_usage(ecosystem, f"scan_sbom:{len(names)}pkgs", request,
+                   response_time_ms=int((time.time() - start) * 1000),
+                   cache_hit=False, status_code=200, endpoint="scan")
+        return sbom
+    if output_format == "spdx":
+        sbom = _build_sbom_spdx(audit, ecosystem)
+        _log_usage(ecosystem, f"scan_sbom:{len(names)}pkgs", request,
+                   response_time_ms=int((time.time() - start) * 1000),
+                   cache_hit=False, status_code=200, endpoint="scan")
+        return sbom
 
     _log_usage(ecosystem, f"scan:{len(names)}pkgs", request,
                response_time_ms=int((time.time() - start) * 1000),
@@ -3557,15 +4063,15 @@ async def admin_sources(request: Request):
             GROUP BY source ORDER BY calls DESC
         """)
         rapidapi_users = await conn.fetch("""
-            SELECT DISTINCT ip_address, user_agent, MAX(created_at) as last_seen
+            SELECT DISTINCT ip_hash AS ip_identifier, user_agent, MAX(created_at) as last_seen
             FROM api_usage WHERE source = 'rapidapi'
-            GROUP BY ip_address, user_agent ORDER BY last_seen DESC LIMIT 20
+            GROUP BY ip_hash, user_agent ORDER BY last_seen DESC LIMIT 20
         """)
     return {
         "total": {r["source"]: r["calls"] for r in by_source},
         "today": {r["source"]: r["calls"] for r in by_source_today},
         "week": {r["source"]: r["calls"] for r in by_source_week},
-        "rapidapi_users": [{"ip": r["ip_address"], "ua": r["user_agent"][:100], "last_seen": r["last_seen"].isoformat()} for r in rapidapi_users],
+        "rapidapi_users": [{"ip": r["ip_identifier"], "ua": r["user_agent"][:100], "last_seen": r["last_seen"].isoformat()} for r in rapidapi_users],
     }
 
 @app.get("/openapi-gpt.json", include_in_schema=False)
@@ -4315,7 +4821,7 @@ async def admin_overview(request: Request, range: str = "30d"):
                     COUNT(*)                                                AS calls,
                     COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day')
                                                                             AS calls_24h,
-                    COUNT(DISTINCT ip_address)                              AS unique_ips,
+                    COUNT(DISTINCT ip_hash)                              AS unique_ips,
                     COUNT(DISTINCT country)                                 AS unique_countries,
                     COUNT(*) FILTER (WHERE cache_hit)                       AS cache_hits,
                     COUNT(*) FILTER (WHERE status_code >= 400)              AS errors,
@@ -4490,12 +4996,12 @@ async def admin_insights(request: Request):
         suspect_rows = await conn.fetch("""
             SELECT DATE_TRUNC('hour', created_at) AS hr,
                    COUNT(*)                    AS calls,
-                   COUNT(DISTINCT ip_address)  AS ips
+                   COUNT(DISTINCT ip_hash)  AS ips
             FROM api_usage
             WHERE source = 'browser'
             GROUP BY hr
             HAVING COUNT(*) > 200
-               AND COUNT(*)::float / GREATEST(COUNT(DISTINCT ip_address), 1) > 20
+               AND COUNT(*)::float / GREATEST(COUNT(DISTINCT ip_hash), 1) > 20
             ORDER BY calls DESC LIMIT 10
         """)
         suspect_browser_hours = [
@@ -4550,7 +5056,7 @@ async def admin_timeseries(request: Request, range: str = "7d", view: str = "all
                    COUNT(*) AS calls,
                    COUNT(*) FILTER (WHERE cache_hit) AS cache_hits,
                    COUNT(*) FILTER (WHERE status_code >= 400) AS errors,
-                   COUNT(DISTINCT ip_address) AS unique_ips,
+                   COUNT(DISTINCT ip_hash) AS unique_ips,
                    COALESCE(AVG(response_time_ms)::int, 0) AS avg_ms,
                    COALESCE(
                        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time_ms)::int, 0
@@ -4675,7 +5181,7 @@ async def admin_plan_metrics(request: Request):
             "SELECT COUNT(*) FROM api_usage WHERE created_at > NOW() - INTERVAL '7 days' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent != ''"
         ) or 0
         unique_ips_30d = await conn.fetchval(
-            "SELECT COUNT(DISTINCT ip_address) FROM api_usage WHERE created_at > NOW() - INTERVAL '30 days' AND ip_address IS NOT NULL"
+            "SELECT COUNT(DISTINCT ip_hash) FROM api_usage WHERE created_at > NOW() - INTERVAL '30 days' AND ip_hash IS NOT NULL"
         ) or 0
         users_count = await conn.fetchval("SELECT COUNT(*) FROM users") or 0
         users_by_plan = await conn.fetch(
@@ -5425,7 +5931,7 @@ async def admin_pageviews(request: Request):
     async with pool.acquire() as conn:
         total = await conn.fetchval("SELECT COUNT(*) FROM page_views_clean")
         today = await conn.fetchval("SELECT COUNT(*) FROM page_views_clean WHERE created_at > CURRENT_DATE")
-        unique_today = await conn.fetchval("SELECT COUNT(DISTINCT ip_address) FROM page_views_clean WHERE created_at > CURRENT_DATE")
+        unique_today = await conn.fetchval("SELECT COUNT(DISTINCT ip_hash) FROM page_views_clean WHERE created_at > CURRENT_DATE")
 
         by_page = await conn.fetch("""
             SELECT path, COUNT(*) as views FROM page_views_clean
@@ -5434,7 +5940,7 @@ async def admin_pageviews(request: Request):
         """)
 
         by_day = await conn.fetch("""
-            SELECT DATE(created_at) as day, COUNT(*) as views, COUNT(DISTINCT ip_address) as unique_visitors
+            SELECT DATE(created_at) as day, COUNT(*) as views, COUNT(DISTINCT ip_hash) as unique_visitors
             FROM page_views_clean WHERE created_at > NOW() - INTERVAL '30 days'
             GROUP BY DATE(created_at) ORDER BY day
         """)
@@ -5476,14 +5982,14 @@ async def admin_charts(request: Request):
     async with pool.acquire() as conn:
         pv_hourly = await conn.fetch(
             "SELECT date_trunc('hour', created_at) as hour, COUNT(*) as views, "
-            "COUNT(DISTINCT ip_address) as unique_visitors "
+            "COUNT(DISTINCT ip_hash) as unique_visitors "
             "FROM page_views_clean WHERE created_at > NOW() - INTERVAL '3 days' "
             "GROUP BY hour ORDER BY hour"
         )
 
         pv_daily = await conn.fetch(
             "SELECT DATE(created_at) as day, COUNT(*) as views, "
-            "COUNT(DISTINCT ip_address) as unique_visitors "
+            "COUNT(DISTINCT ip_hash) as unique_visitors "
             "FROM page_views_clean GROUP BY day ORDER BY day"
         )
 
@@ -5749,7 +6255,7 @@ async def get_savings():
     pool = await get_pool()
     async with pool.acquire() as conn:
         total_checks = await conn.fetchval(
-            "SELECT COUNT(*) FROM api_usage WHERE ip_address NOT IN ('127.0.0.1','::1','10.10.0.140','10.10.0.1','91.134.4.25')"
+            "SELECT COUNT(*) FROM api_usage WHERE NOT (COALESCE(user_agent, '') LIKE 'DepScope-%' OR COALESCE(user_agent, '') LIKE '%CacheWarmer%')"
         )
 
     tokens_without = 8500   # avg tokens per check without DepScope
@@ -6436,7 +6942,7 @@ async def intelligence_dashboard(request: Request):
         agent_breakdown = await conn.fetch("""
             SELECT COALESCE(source, 'unknown') AS source,
                    COUNT(*) AS calls,
-                   COUNT(DISTINCT ip_address) AS unique_ips
+                   COUNT(DISTINCT ip_hash) AS unique_ips
             FROM api_usage
             WHERE created_at > NOW() - INTERVAL '7 days' AND COALESCE(source, '') <> ''
             GROUP BY source
@@ -6445,7 +6951,7 @@ async def intelligence_dashboard(request: Request):
         countries = await conn.fetch("""
             SELECT country,
                    COUNT(*) AS calls,
-                   COUNT(DISTINCT ip_address) AS unique_ips
+                   COUNT(DISTINCT ip_hash) AS unique_ips
             FROM api_usage
             WHERE country IS NOT NULL AND created_at > NOW() - INTERVAL '7 days'
             GROUP BY country
@@ -6496,7 +7002,7 @@ async def intelligence_dashboard(request: Request):
         totals = await conn.fetchrow("""
             SELECT COUNT(*) AS calls_7d,
                    COUNT(DISTINCT session_id) AS sessions_7d,
-                   COUNT(DISTINCT ip_address) AS ips_7d,
+                   COUNT(DISTINCT ip_hash) AS ips_7d,
                    AVG(response_time_ms)::INT AS avg_ms_7d,
                    SUM(CASE WHEN cache_hit THEN 1 ELSE 0 END)::FLOAT
                      / GREATEST(COUNT(*),1) AS cache_hit_rate_7d
@@ -6664,7 +7170,7 @@ async def traffic_breakdown(request: Request, hours: int = 24):
     AI_UA = r"(GPTBot|OAI-SearchBot|ChatGPT-User|PerplexityBot|CCBot|ClaudeBot|anthropic-ai|Bytespider|Amazonbot|Applebot)"
     SEARCH_UA = r"(Googlebot|GoogleOther|Google-InspectionTool|Googlebot-Image|Mediapartners|Bingbot|Slurp|DuckDuckBot|Yandex|Baiduspider)"
     OTHER_BOT_UA = r"(AhrefsBot|SemrushBot|MJ12bot|DotBot|PetalBot|facebookexternalhit|Discordbot|TelegramBot|WhatsApp|Twitterbot|LinkedInBot|Pingdom|UptimeRobot|Site24x7|bot|crawl|spider)"
-    INTERNAL_IP = "(ip_address LIKE '10.10.%' OR ip_address LIKE '127.%' OR ip_address LIKE '37.182.176.%' OR ip_address LIKE '37.182.177.%' OR ip_address LIKE '91.134.4.%' OR ip_address IN ('::1','10.10.0.140','10.10.0.1','91.134.4.25'))"
+    INTERNAL_IP = "(COALESCE(user_agent, '') LIKE 'DepScope-%' OR COALESCE(user_agent, '') LIKE '%CacheWarmer%' OR COALESCE(user_agent, '') LIKE '%curl/%' OR COALESCE(user_agent, '') = '' OR agent_client IN ('crawler', 'unknown'))"
 
     async with (await get_pool()).acquire() as conn:
         row = await conn.fetchrow(f"""
@@ -6739,7 +7245,7 @@ async def launch_metrics(request: Request):
         # API traffic (last 24h)
         api_24h = await conn.fetchval("SELECT COUNT(*) FROM api_usage WHERE created_at > NOW() - INTERVAL '24 hours'")
         api_total = await conn.fetchval("SELECT COUNT(*) FROM api_usage")
-        api_ips = await conn.fetchval("SELECT COUNT(DISTINCT ip_address) FROM api_usage WHERE created_at > NOW() - INTERVAL '24 hours'")
+        api_ips = await conn.fetchval("SELECT COUNT(DISTINCT ip_hash) FROM api_usage WHERE created_at > NOW() - INTERVAL '24 hours'")
 
     # GitHub (new account)
     gh_stars = gh_forks = gh_watchers = 0
@@ -6908,3 +7414,4 @@ async def admin_outreach_detail(email_id: int, request: Request):
         raise HTTPException(404, "Not found")
     return dict(row)
 
+  # PATCH_VERSION_PARAM_V1
