@@ -1686,6 +1686,81 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
              "health_score": r["health_score"]}
             for r in (suggestions or [])[:5]
         ]
+        # Run typosquat detector + historical KB probe even on 404 so  # PATCH_CHECK_404_ENRICH_V1
+        # agents get everything in one roundtrip.
+        ts_info = None
+        hc_info = None
+        try:
+            async with (await get_pool()).acquire() as conn:
+                # Typosquat: reuse the same logic as /api/typosquat
+                ts_row = await conn.fetchrow("""
+                    SELECT suspect, legitimate, distance
+                    FROM typosquat_candidates
+                    WHERE ecosystem=$1 AND LOWER(suspect)=LOWER($2)
+                    LIMIT 1
+                """, ecosystem, package)
+                if ts_row:
+                    ts_info = {
+                        "is_suspected_typosquat": True,
+                        "likely_target": ts_row["legitimate"],
+                        "distance": ts_row["distance"],
+                    }
+                else:
+                    # Runtime check: compare against top downloads
+                    pop_rows = await conn.fetch("""
+                        SELECT name, downloads_weekly AS dl
+                        FROM packages
+                        WHERE ecosystem=$1 AND downloads_weekly > 1000000
+                          AND LENGTH(name) BETWEEN LENGTH($2)-2 AND LENGTH($2)+2
+                        ORDER BY downloads_weekly DESC
+                        LIMIT 50
+                    """, ecosystem, package)
+                    # naive distance check
+                    best = None
+                    for pr in pop_rows:
+                        legit = pr["name"]
+                        if abs(len(legit) - len(package)) > 2:
+                            continue
+                        # cheap Levenshtein
+                        def _lev(a, b):
+                            if a == b: return 0
+                            if len(a) < len(b): a, b = b, a
+                            prev = list(range(len(b) + 1))
+                            for i, ca in enumerate(a, 1):
+                                cur = [i]
+                                for j, cb in enumerate(b, 1):
+                                    cur.append(min(cur[-1]+1, prev[j]+1, prev[j-1]+(ca!=cb)))
+                                prev = cur
+                            return prev[-1]
+                        d = _lev(package.lower(), legit.lower())
+                        if d <= 2 and (best is None or d < best[1]):
+                            best = (legit, d, pr["dl"])
+                    if best:
+                        ts_info = {
+                            "is_suspected_typosquat": True,
+                            "likely_target": best[0],
+                            "distance": best[1],
+                            "target_downloads_weekly": best[2],
+                        }
+                # Historical KB check by name (even if unpublished)
+                hc_rows_404 = await conn.fetch("""
+                    SELECT affected_versions, incident_type, year, summary
+                    FROM historical_compromises
+                    WHERE ecosystem=$1 AND LOWER(package_name)=LOWER($2)
+                """, ecosystem, package)
+                if hc_rows_404:
+                    hc_info = [
+                        {
+                            "affected_versions": r["affected_versions"],
+                            "incident_type": r["incident_type"],
+                            "year": r["year"],
+                            "summary": r["summary"],
+                        }
+                        for r in hc_rows_404
+                    ]
+        except Exception:
+            pass
+
         detail = {
             "error": "package_not_found",
             "ecosystem": ecosystem,
@@ -1697,6 +1772,19 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
             detail["hint"] = (
                 "Top fuzzy matches above. Pick the closest, or this may be "
                 "a hallucinated name."
+            )
+        if ts_info:
+            detail["typosquat"] = ts_info
+            if not detail.get("hint"):
+                detail["hint"] = (
+                    f"Name looks like a typosquat of '{ts_info.get('likely_target')}'. "
+                    "Verify before install."
+                )
+        if hc_info:
+            detail["historical_compromise"] = hc_info
+            detail["hint"] = (
+                f"Name matches {len(hc_info)} historical supply-chain incident(s) "
+                "even though not currently in the registry — check affected_versions."
             )
         raise HTTPException(404, detail)
 
