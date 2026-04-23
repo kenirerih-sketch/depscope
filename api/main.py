@@ -3649,7 +3649,7 @@ async def compare_packages(ecosystem: str, packages_csv: str, request: Request =
 
     # Sort by health score descending
     valid = [p for p in packages if "error" not in p]
-    valid.sort(key=lambda x: x["health_score"], reverse=True)
+    valid.sort(key=lambda x: (x.get("health_score") if x.get("health_score") is not None else -1), reverse=True)
     winner = valid[0]["package"] if valid else None
 
     # Compute caveats so the winner is NOT blind to trade-offs.
