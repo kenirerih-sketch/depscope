@@ -46,6 +46,44 @@ export default function AdminOverviewPage() {
                  className="text-xs px-3 py-1 rounded"
                  style={{ background: "var(--bg-hover)", color: "var(--text-dim)" }}>⟳</button>}>
 
+      <Card>
+        <div className="p-5 text-xs leading-relaxed" style={{ color: "var(--text-dim)" }}>
+          <div className="font-semibold mb-2 text-sm" style={{ color: "var(--text)" }}>About DepScope</div>
+          <p className="mb-2">
+            <strong style={{ color: "var(--text)" }}>Sistema.</strong>{" "}
+            API + MCP gratuita che dice agli agent AI se un pacchetto è sicuro
+            prima di <code>npm install</code>/<code>pip install</code>. 17 ecosistemi,
+            392k package, 7.3k CVE arricchite con KEV+EPSS, 22 MCP tools.
+          </p>
+          <p className="mb-2">
+            <strong style={{ color: "var(--text)" }}>Obiettivo.</strong>{" "}
+            Diventare il default anti-hallucination per ogni coding agent (Claude,
+            Cursor, Copilot, Windsurf) e monetizzare l&apos;intelligence derivata dalle
+            query (top pacchetti allucinati, uso per-agent, trust maintainer).
+          </p>
+          <p className="mb-2">
+            <strong style={{ color: "var(--text)" }}>Potenzialità.</strong>{" "}
+            ClaudeBot+GPTBot già crawlano aggressivamente (22k/week). Ogni query
+            agent alimenta un dataset unico che nessun competitor ha. Acqui-hire offer
+            da Socket.dev declinata — moat data confermato.
+          </p>
+          <p className="mb-2">
+            <strong style={{ color: "var(--green)" }}>Forza.</strong>{" "}
+            Zero-auth/free per agent (flywheel), 17 ecosistemi (long-tail che
+            Socket/Snyk ignorano), FAQPage citation-ready per LLM, GDPR-hashed
+            telemetry, trust score 0-100 per maintainer (differenziante).
+          </p>
+          <p>
+            <strong style={{ color: "var(--red)" }}>Debolezza.</strong>{" "}
+            No capitale/team (single operator), copertura mainstream ancora parziale
+            (npm 45k/3M), brand collision su Devpost, dipendenza da GitHub/Cloudflare,
+            DB PostgreSQL SQL_ASCII legacy (Unicode sanitizer come workaround).
+          </p>
+        </div>
+      </Card>
+
+      <div className="mt-4" />
+
       <Grid cols={4}>
         <Card><Stat label="Packages"       value={num(verticals.packages ?? stats.packages_indexed)}
                     sub={`${stats.ecosystems?.length ?? "—"} ecosystems`} /></Card>
