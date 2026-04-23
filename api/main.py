@@ -3465,6 +3465,89 @@ async def compare_packages(ecosystem: str, packages_csv: str, request: Request =
     return compare_result
 
 
+
+# ─── Transitive dep walker (scan_project include_transitive) ────────  # PATCH_TRANSITIVE_V1
+# BFS over the dep graph up to `depth` levels. Reuses fetch_package for the
+# registry-side listing. Memoizes. Tolerates missing deps (many ecosystems
+# don't expose a full resolved graph — we try, skip gracefully on failure).
+
+async def _walk_transitive(ecosystem: str, direct_names: list[str], max_depth: int = 3, max_nodes: int = 500):
+    """Return (flat_list, tree_edges) where flat_list[i] = {package, depth, error?}.
+    tree_edges = {parent_pkg: [child_pkgs]}."""
+    import asyncio as _aio
+    from api.registries import fetch_package as _fp
+
+    seen: dict[str, int] = {}   # name -> min depth seen
+    edges: dict[str, list[str]] = {}
+    queue = [(n, 0, None) for n in direct_names]   # (name, depth, parent)
+
+    async def _safe_fetch(name: str):
+        try:
+            return await _aio.wait_for(_fp(ecosystem, name), timeout=2.5)
+        except Exception:
+            return None
+
+    while queue and len(seen) < max_nodes:
+        # Process current layer in parallel for speed.
+        layer = queue
+        queue = []
+        # Dedupe within layer
+        fresh = []
+        for name, depth, parent in layer:
+            if name in seen and seen[name] <= depth:
+                if parent is not None:
+                    edges.setdefault(parent, []).append(name)
+                continue
+            seen[name] = depth
+            fresh.append((name, depth, parent))
+        if not fresh:
+            break
+
+        # Only fetch deps when depth < max_depth
+        fetch_targets = [(name, depth, parent) for (name, depth, parent) in fresh if depth < max_depth]
+        results = await _aio.gather(*[_safe_fetch(n) for n, _, _ in fetch_targets], return_exceptions=True)
+
+        for (name, depth, parent), res in zip(fetch_targets, results):
+            if parent is not None:
+                edges.setdefault(parent, []).append(name)
+            pkg = res if isinstance(res, dict) else None
+            if pkg:
+                deps = pkg.get("dependencies") or []
+                if isinstance(deps, dict):
+                    deps = list(deps.keys())
+                # Skip internal / scoped-weird / empty names
+                deps = [d for d in deps if isinstance(d, str) and d.strip()][:40]
+                for d in deps:
+                    if len(seen) >= max_nodes:
+                        break
+                    if d not in seen:
+                        queue.append((d, depth + 1, name))
+
+        # Also mark direct-layer parents in edges if depth == max_depth and no descent.
+        for name, depth, parent in fresh:
+            if depth >= max_depth and parent is not None:
+                edges.setdefault(parent, []).append(name)
+
+    # Build flat_list
+    flat = [{"package": n, "depth": d} for n, d in sorted(seen.items(), key=lambda x: (x[1], x[0]))]
+    return flat, edges
+
+
+async def _lightweight_health(ecosystem: str, name: str, conn):
+    """Quick health lookup from DB (transitive-fast path). Avoids full /check round-trip."""
+    row = await conn.fetchrow(
+        "SELECT health_score, latest_version, deprecated FROM packages WHERE ecosystem=$1 AND LOWER(name)=LOWER($2)",
+        ecosystem, name,
+    )
+    if not row:
+        return None
+    return {
+        "health_score": row["health_score"],
+        "latest_version": row["latest_version"],
+        "deprecated": row["deprecated"],
+    }
+
+
 @app.post("/api/scan", tags=["packages"])
 async def scan_dependencies(request: Request):
     """
@@ -3591,6 +3674,55 @@ async def scan_dependencies(request: Request):
     else:
         project_risk = "low"
 
+    # Transitive walk (opt-in).  # PATCH_TRANSITIVE_V1
+    transitive_info = None
+    if include_transitive:
+        try:
+            max_depth = int(body.get("transitive_depth", 3))
+            max_depth = max(1, min(5, max_depth))  # clamp 1..5
+            flat, edges = await _walk_transitive(ecosystem, list(packages.keys()), max_depth=max_depth)
+            direct_set = set(packages.keys())
+            only_transitive = [f for f in flat if f["package"] not in direct_set]
+
+            # Health lookups from DB (fast path) for transitive nodes
+            pool = await get_pool()
+            async with pool.acquire() as conn:
+                annotated = []
+                low_health_count = 0
+                deprecated_count = 0
+                for node in only_transitive:
+                    info = await _lightweight_health(ecosystem, node["package"], conn)
+                    row = {"package": node["package"], "depth": node["depth"]}
+                    if info:
+                        row["latest_version"] = info["latest_version"]
+                        row["health_score"] = info["health_score"]
+                        row["deprecated"] = info["deprecated"]
+                        if info["health_score"] is not None and info["health_score"] < 40:
+                            low_health_count += 1
+                        if info["deprecated"]:
+                            deprecated_count += 1
+                    else:
+                        row["health_score"] = None
+                    annotated.append(row)
+
+            transitive_info = {
+                "max_depth": max_depth,
+                "direct_count": len(direct_set),
+                "transitive_count": len(only_transitive),
+                "total_packages": len(flat),
+                "low_health": low_health_count,
+                "deprecated": deprecated_count,
+                "truncated": len(flat) >= 500,
+                "packages": annotated[:300],  # cap payload
+                "edges": {k: v[:20] for k, v in edges.items()},
+            }
+            if low_health_count > 0:
+                issues.append(f"{low_health_count} transitive dep(s) with low health")
+            if deprecated_count > 0:
+                issues.append(f"{deprecated_count} transitive dep(s) deprecated")
+        except Exception:
+            transitive_info = {"error": "walk_failed"}
+
     # SBOM output branch — when caller asks for cyclonedx/spdx we emit that  # PATCH_SCAN_ENHANCE_V1
     # format directly instead of the native audit dict.
     if output_format == "cyclonedx":
@@ -3614,6 +3746,7 @@ async def scan_dependencies(request: Request):
         "ecosystem": ecosystem,
         "packages_scanned": len(names),
         "project_risk": project_risk,
+        "transitive": transitive_info,
         "summary": {
             "total_vulnerabilities": total_vulns,
             "critical": total_critical,
