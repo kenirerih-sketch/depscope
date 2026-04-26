@@ -53,7 +53,7 @@ export default function AdminOverviewPage() {
           <p className="mb-2">
             <strong style={{ color: "var(--text)" }}>Sistema.</strong>{" "}
             API + MCP gratuita che dice agli agent AI se un pacchetto è sicuro
-            prima di <code>npm install</code>/<code>pip install</code>. 17 ecosistemi,
+            prima di <code>npm install</code>/<code>pip install</code>. 19 ecosistemi,
             392k package, 7.3k CVE arricchite con KEV+EPSS, 22 MCP tools.
           </p>
           <p className="mb-2">
@@ -70,7 +70,7 @@ export default function AdminOverviewPage() {
           </p>
           <p className="mb-2">
             <strong style={{ color: "var(--green)" }}>Forza.</strong>{" "}
-            Zero-auth/free per agent (flywheel), 17 ecosistemi (long-tail che
+            Zero-auth/free per agent (flywheel), 19 ecosistemi (long-tail che
             Socket/Snyk ignorano), FAQPage citation-ready per LLM, GDPR-hashed
             telemetry, trust score 0-100 per maintainer (differenziante).
           </p>

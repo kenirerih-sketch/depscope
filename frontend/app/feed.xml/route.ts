@@ -43,15 +43,15 @@ const UPDATES = [
     date: "2026-04-19T00:00:00Z",
     link: `${BASE}/updates`,
     summary:
-      "DepScope now has searchable error → fix database, stack compatibility matrix, and known bugs per version across 17 ecosystems.",
+      "DepScope now has searchable error → fix database, stack compatibility matrix, and known bugs per version across 19 ecosystems.",
   },
   {
     id: "2026-04-18-17-ecosystems",
-    title: "Expanded to 17 ecosystems",
+    title: "Expanded to 19 ecosystems",
     date: "2026-04-18T00:00:00Z",
     link: `${BASE}/updates`,
     summary:
-      "Added Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew. Total: 17 ecosystems.",
+      "Added Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew. Total: 19 ecosystems.",
   },
 ];
 
@@ -87,7 +87,7 @@ export async function GET() {
 <feed xmlns="http://www.w3.org/2005/Atom">
   <id>${BASE}/</id>
   <title>DepScope — Trending Packages & Updates</title>
-  <subtitle>Live trending packages across 17 ecosystems, plus product updates.</subtitle>
+  <subtitle>Live trending packages across 19 ecosystems, plus product updates.</subtitle>
   <link href="${BASE}/" />
   <link rel="self" href="${BASE}/feed.xml" type="application/atom+xml" />
   <updated>${now}</updated>

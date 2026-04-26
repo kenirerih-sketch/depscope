@@ -171,7 +171,7 @@ def welcome_email(email: str) -> Tuple[str, str, str]:
 
       <h2 style="margin:24px 0 8px 0;font-size:14px;font-weight:600;color:{COLORS['text']};letter-spacing:0.02em;">What DepScope covers</h2>
       <ul style="margin:0 0 16px 0;padding-left:20px;color:{COLORS['text_dim']};">
-        <li>Package health across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, and more)</li>
+        <li>Package health across 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, and more)</li>
         <li>Error &rarr; fix resolution database</li>
         <li>Stack compatibility matrix</li>
         <li>Known bugs by package version</li>
@@ -193,7 +193,7 @@ Quick example:
     -H "Authorization: Bearer ds_live_xxx"
 
 What DepScope covers:
-  - Package health across 17 ecosystems
+  - Package health across 19 ecosystems
   - Error -> fix resolution database
   - Stack compatibility matrix
   - Known bugs by package version

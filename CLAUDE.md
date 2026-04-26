@@ -1,6 +1,6 @@
 ---
 name: DepScope Platform
-description: depscope.dev — Package Intelligence for AI Agents. CT 140 on Proxmox 9 (OVH RISE-M). FastAPI + Next.js + PostgreSQL 17. 17 ecosystems, 31k+ packages indexed, 2.2k+ vulnerabilities, 595 curated alternatives, MCP with 29 tools. Free, no-auth public API. Stage mirror at stage.depscope.dev.
+description: depscope.dev — Package Intelligence for AI Agents. CT 140 on Proxmox 9 (OVH RISE-M). FastAPI + Next.js + PostgreSQL 17. 19 ecosystems, 31k+ packages indexed, 2.2k+ vulnerabilities, 595 curated alternatives, MCP with 29 tools. Free, no-auth public API. Stage mirror at stage.depscope.dev.
 type: project
 ---
 

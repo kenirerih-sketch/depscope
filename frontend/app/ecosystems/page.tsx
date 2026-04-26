@@ -14,7 +14,7 @@ interface StatsResponse {
 export const metadata: Metadata = {
   title: "Ecosystems — DepScope",
   description:
-    "Browse package intelligence across 17 registries: npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew. Free, zero-auth. Agent-ready.",
+    "Browse package intelligence across 19 registries: npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew. Free, zero-auth. Agent-ready.",
   alternates: { canonical: "https://depscope.dev/ecosystems" },
   openGraph: {
     title: "Ecosystems — DepScope",

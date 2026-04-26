@@ -4,7 +4,7 @@ slug: weekly-report-002
 date: 2026-04-20
 author: DepScope
 tags: [package-health, supply-chain, weekly-report]
-description: "Fresh package health numbers from the DepScope index — 22,588 packages across 17 ecosystems."
+description: "Fresh package health numbers from the DepScope index — 22,588 packages across 19 ecosystems."
 ---
 
 # The State of Package Health — Weekly Report #002

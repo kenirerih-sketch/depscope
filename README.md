@@ -82,7 +82,7 @@ No auth. No signup. No API key. 200 req/min free tier.
 
 ---
 
-## 17 ecosystems, one endpoint
+## 19 ecosystems, one endpoint
 
 ```bash
 curl https://depscope.dev/api/check/{ecosystem}/{package}

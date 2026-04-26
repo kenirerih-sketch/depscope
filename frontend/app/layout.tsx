@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     template: "%s | DepScope",
   },
   description:
-    "Save tokens and energy while shipping safer code. Free API for package health, vulnerabilities, and dependency analysis across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, and more). Built for AI agents.",
+    "Save tokens and energy while shipping safer code. Free API for package health, vulnerabilities, and dependency analysis across 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, and more). Built for AI agents.",
   keywords: [
     "package health check", "npm security", "pypi vulnerabilities", "cargo crates audit", "go modules check", "composer php security", "maven java audit", "nuget dotnet check", "rubygems ruby security",
     "dependency check API", "AI agent tools", "MCP server", "software supply chain security",
@@ -86,7 +86,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       "@type": "WebAPI",
       "name": "DepScope",
       "description":
-        "Package Intelligence API for AI Agents. Check health, vulnerabilities, and versions of packages across 17 ecosystems including npm, PyPI, Cargo, Go, Maven, NuGet, and more. Free, no authentication required.",
+        "Package Intelligence API for AI Agents. Check health, vulnerabilities, and versions of packages across 19 ecosystems including npm, PyPI, Cargo, Go, Maven, NuGet, and more. Free, no authentication required.",
       "url": "https://depscope.dev",
       "documentation": "https://depscope.dev/api-docs",
       "termsOfService": "https://depscope.dev/contact",

@@ -28,7 +28,7 @@ security studies measure 5-22% hallucination rates. Attackers register
 the hallucinated names with malware; AI agents then auto-install them.
 This is **slopsquatting** and it's happening now in production. DepScope
 answers the AI's "does this package exist?" question authoritatively,
-across 17 registries, in under 100ms, for free, with no signup.
+across 19 registries, in under 100ms, for free, with no signup.
 Installed via MCP, it works with Claude, Cursor, Copilot, Windsurf,
 Aider, Devin, Continue, and any future MCP client.
 
@@ -87,7 +87,7 @@ Specifically, and **entirely spent on open-source sustainability**:
 
 ## Key metrics (at time of application)
 
-- 390k+ packages indexed across 17 registries (npm, PyPI, Cargo,
+- 390k+ packages indexed across 19 registries (npm, PyPI, Cargo,
   Go, Composer, Maven, NuGet, RubyGems, Pub, Hex, Swift, CocoaPods,
   CPAN, Hackage, CRAN, Conda, Homebrew).
 - 7.3k+ vulnerabilities enriched with CISA KEV + EPSS.

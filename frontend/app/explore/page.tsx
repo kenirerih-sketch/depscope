@@ -23,7 +23,7 @@ const DIMENSIONS = [
     eyebrow: "Errors",
     title: "Error → Fix database",
     description:
-      "Paste a stack trace. Get the exact fix from issues, docs, and maintainer answers across 17 ecosystems.",
+      "Paste a stack trace. Get the exact fix from issues, docs, and maintainer answers across 19 ecosystems.",
   },
   {
     href: "/explore/compat",

@@ -69,7 +69,7 @@ export async function generateMetadata(
   return {
     title: `Trending ${label} — DepScope`,
     description: `Packages AI agents are querying most right now. ${
-      eco && eco !== "all" ? `Ecosystem: ${eco}.` : "Across 17 ecosystems."
+      eco && eco !== "all" ? `Ecosystem: ${eco}.` : "Across 19 ecosystems."
     } Live rank, movement and weekly growth.`,
     alternates: {
       canonical: eco && eco !== "all"
@@ -107,7 +107,7 @@ export default async function TrendingPage(
         <PageHeader
           eyebrow="Explore · Trending"
           title="What AI agents are searching right now"
-          description="Live rank, movement and weekly growth across 17 ecosystems. Server-rendered, cached 5 minutes."
+          description="Live rank, movement and weekly growth across 19 ecosystems. Server-rendered, cached 5 minutes."
           actions={<EcosystemFilter current={ecosystem} ecosystems={ECOSYSTEMS} labels={ECO_LABELS} />}
         />
 

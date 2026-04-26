@@ -34,7 +34,7 @@ export default function Page() {
         <PageHeader
           eyebrow="Free Tool"
           title="Check Package Health"
-          description="One score from 0 to 100. Free. Covers 17 ecosystems. No signup."
+          description="One score from 0 to 100. Free. Covers 19 ecosystems. No signup."
         />
         <Section>
           <Card>

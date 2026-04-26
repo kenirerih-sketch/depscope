@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "The State of Package Health 2026 | DepScope",
   description:
-    "Analysis of 14,700+ packages across 17 ecosystems reveals 54% fall into caution or critical health categories. Deprecated packages still get 146M+ downloads/week. AI agents suggest deprecated packages 23% of the time.",
+    "Analysis of 14,700+ packages across 19 ecosystems reveals 54% fall into caution or critical health categories. Deprecated packages still get 146M+ downloads/week. AI agents suggest deprecated packages 23% of the time.",
   openGraph: {
     title: "The State of Package Health 2026 | DepScope",
     description:
@@ -45,7 +45,7 @@ export default function ReportPage() {
     "@type": "Article",
     headline: "The State of Package Health 2026",
     description:
-      "Analysis of 14,700+ packages across 17 ecosystems reveals that 54% fall into caution or critical health categories.",
+      "Analysis of 14,700+ packages across 19 ecosystems reveals that 54% fall into caution or critical health categories.",
     author: {
       "@type": "Organization",
       name: "DepScope",
@@ -105,7 +105,7 @@ export default function ReportPage() {
           </h2>
           <div className="card p-6 text-[var(--text-dim)] leading-relaxed">
             <p>
-              An analysis of <strong className="text-[var(--text)]">14,700+ packages</strong> across 17 ecosystems reveals that{" "}
+              An analysis of <strong className="text-[var(--text)]">14,700+ packages</strong> across 19 ecosystems reveals that{" "}
               <strong className="text-[var(--orange)]">54% of widely-used packages</strong> fall into
               &ldquo;caution&rdquo; or &ldquo;critical&rdquo; health categories. Deprecated packages
               still accumulate <strong className="text-[var(--red)]">hundreds of millions of weekly downloads</strong>,

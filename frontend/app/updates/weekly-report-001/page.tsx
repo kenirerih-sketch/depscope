@@ -222,7 +222,7 @@ export default function WeeklyReport001Page() {
       <PageHeader
         eyebrow="Weekly Report #001 · Published 2026-04-19"
         title="The State of Package Health"
-        description="What we learned indexing 14,812 packages across 17 ecosystems."
+        description="What we learned indexing 14,812 packages across 19 ecosystems."
         actions={<Badge variant="info">Weekly</Badge>}
       />
 
@@ -242,7 +242,7 @@ export default function WeeklyReport001Page() {
               <P>
                 Those two facts are not outliers. They are representative.
                 We&apos;ve spent the last several months indexing{" "}
-                <strong>14,812 packages across 17 ecosystems</strong> — npm,
+                <strong>14,812 packages across 19 ecosystems</strong> — npm,
                 PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex,
                 Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew — and
                 running the same health pipeline against each one. This is a

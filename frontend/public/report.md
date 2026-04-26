@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-An analysis of 14,700+ packages across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more) reveals that 35% of widely-used packages fall into "caution" or "critical" health categories. Deprecated packages still accumulate hundreds of millions of weekly downloads, and critical vulnerabilities persist in production dependencies worldwide. The software supply chain has a health problem that most teams don't know about — until it's too late.
+An analysis of 14,700+ packages across 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more) reveals that 35% of widely-used packages fall into "caution" or "critical" health categories. Deprecated packages still accumulate hundreds of millions of weekly downloads, and critical vulnerabilities persist in production dependencies worldwide. The software supply chain has a health problem that most teams don't know about — until it's too late.
 
 ---
 

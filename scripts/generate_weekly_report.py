@@ -147,7 +147,7 @@ def render_markdown(n: int, date_iso: str, d: dict) -> str:
         f"date: {date_iso}",
         "author: DepScope",
         "tags: [package-health, supply-chain, weekly-report]",
-        f'description: "Fresh package health numbers from the DepScope index — {fmt_int(d["total_packages"])} packages across 17 ecosystems."',
+        f'description: "Fresh package health numbers from the DepScope index — {fmt_int(d["total_packages"])} packages across 19 ecosystems."',
         "---",
         "",
         f"# The State of Package Health — Weekly Report #{n:03d}",
@@ -294,7 +294,7 @@ def render_tsx(n: int, date_iso: str, d: dict) -> str:
         "      <PageHeader\n"
         f'        eyebrow={{`Weekly Report #{n:03d} · Published ${{DATE_PUBLISHED}}`}}\n'
         '        title="The State of Package Health"\n'
-        '        description={`Snapshot of ${fmt(TOTAL_PACKAGES)} packages across 17 ecosystems.`}\n'
+        '        description={`Snapshot of ${fmt(TOTAL_PACKAGES)} packages across 19 ecosystems.`}\n'
         '        actions={<Badge variant="info">Weekly</Badge>}\n'
         "      />\n"
         "      <Section>\n"

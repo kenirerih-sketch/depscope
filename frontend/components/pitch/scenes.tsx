@@ -503,7 +503,7 @@ function SceneSolution() {
       </div>
 
       <Caption
-        text="One endpoint · 17 ecosystems · cached · free · no auth"
+        text="One endpoint · 19 ecosystems · cached · free · no auth"
         progress={clamp((t - 9.5) / 0.5, 0, 1)}
       />
     </div>
@@ -892,7 +892,7 @@ function SceneEnergy() {
           from="—"
           to="14,744+"
           prog={pkgProg}
-          sub="packages · 17 ecosystems · 402 CVEs"
+          sub="packages · 19 ecosystems · 402 CVEs"
           sym="🔒"
         />
       </div>
@@ -1148,7 +1148,7 @@ function SceneCTA() {
           transform: `translateY(${(1 - metaIn) * 10}px)`,
           letterSpacing: '0.04em',
         }}>
-          {['No signup', 'No API key', '17 ecosystems', 'Free'].map((m, i) => (
+          {['No signup', 'No API key', '19 ecosystems', 'Free'].map((m, i) => (
             <div key={m} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ color: C.green }}>✓</span> {m}
               {i < 3 && <span style={{ color: C.textFaint, marginLeft: 20 }}>·</span>}

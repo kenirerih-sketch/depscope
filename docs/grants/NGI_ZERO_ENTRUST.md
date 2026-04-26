@@ -19,7 +19,7 @@ is ready to paste into the form, with minor editing.
 DepScope is a free, zero-authentication API and MCP server that
 prevents AI coding agents (Claude, Cursor, Copilot, Windsurf) from
 recommending non-existent, unmaintained, or vulnerable software
-packages. Already operational across 17 registries, it indexes 390k+
+packages. Already operational across 19 registries, it indexes 390k+
 packages and captures hallucination signals that **no other public
 dataset has**.
 

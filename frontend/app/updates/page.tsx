@@ -70,7 +70,7 @@ const ENTRIES: Entry[] = [
   },
   {
     date: "2026-04-18",
-    title: "Expanded to 17 ecosystems",
+    title: "Expanded to 19 ecosystems",
     badge: "infra",
     body: "Added Pub (Dart/Flutter), Hex (Elixir), Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew on top of npm, PyPI, Cargo, Go, Composer, Maven, NuGet, RubyGems.",
   },

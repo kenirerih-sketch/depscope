@@ -33,7 +33,7 @@ interface HealthData {
 
 export const metadata: Metadata = {
   title: "Popular Packages — Most Searched | DepScope",
-  description: "Most searched packages on DepScope. Health scores, vulnerability data, and recommendations for trending packages across 17 ecosystems.",
+  description: "Most searched packages on DepScope. Health scores, vulnerability data, and recommendations for trending packages across 19 ecosystems.",
   openGraph: {
     title: "Popular Packages — Most Searched | DepScope",
     description: "Trending packages with health scores and vulnerability data. Free package intelligence by DepScope.",
@@ -165,8 +165,8 @@ export default async function PopularPage() {
           title="Popular packages"
           description={
             stats?.packages_indexed
-              ? `${stats.packages_indexed.toLocaleString()} packages indexed across 17 ecosystems, with real-time health scores.`
-              : "14,744+ packages indexed across 17 ecosystems, with real-time health scores."
+              ? `${stats.packages_indexed.toLocaleString()} packages indexed across 19 ecosystems, with real-time health scores.`
+              : "14,744+ packages indexed across 19 ecosystems, with real-time health scores."
           }
         />
 

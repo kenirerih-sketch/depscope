@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   ],
   openGraph: {
     title: "Known Bugs per Version | DepScope",
-    description: "Skip buggy releases. Per-version bug database across 17 ecosystems.",
+    description: "Skip buggy releases. Per-version bug database across 19 ecosystems.",
     url: "https://depscope.dev/explore/bugs",
     siteName: "DepScope",
     type: "website",
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Known Bugs per Version | DepScope",
-    description: "Per-version bug database across 17 ecosystems.",
+    description: "Per-version bug database across 19 ecosystems.",
   },
   alternates: {
     canonical: "https://depscope.dev/explore/bugs",

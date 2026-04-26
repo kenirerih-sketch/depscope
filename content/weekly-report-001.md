@@ -12,7 +12,7 @@ og_image: /og/weekly-report-001.png
 
 > **Pillow alone accounts for 106 million weekly downloads. It ships with 3 unpatched vulnerabilities in our index. `path-is-absolute` has a health score of 20 out of 100, is officially deprecated, and is downloaded 76 million times per week.**
 
-Those two facts are not outliers. They are representative. We've spent the last several months indexing **14,812 packages across 17 ecosystems** (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew) and running the same health pipeline against each one. This is a report on what the data actually says — not marketing.
+Those two facts are not outliers. They are representative. We've spent the last several months indexing **14,812 packages across 19 ecosystems** (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew) and running the same health pipeline against each one. This is a report on what the data actually says — not marketing.
 
 ## Methodology
 

@@ -5,7 +5,7 @@ import { Card, CardBody, PageHeader, Section, Footer } from "../../components/ui
 export const metadata: Metadata = {
   title: "Supply Chain Security API — Free for AI Agents",
   description:
-    "Prevent supply chain attacks before install. DepScope API checks package health, vulnerabilities, typosquatting risk, deprecation and license across 17 ecosystems.",
+    "Prevent supply chain attacks before install. DepScope API checks package health, vulnerabilities, typosquatting risk, deprecation and license across 19 ecosystems.",
   alternates: { canonical: "https://depscope.dev/supply-chain-security-api" },
   robots: { index: true, follow: true },
   openGraph: {

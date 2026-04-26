@@ -114,7 +114,7 @@ product.
 > Hi — congrats on the DepScope hackathon entry! We run
 > [depscope.dev](https://depscope.dev), a package intelligence API+MCP
 > that predates (or closely coincides with) your submission. Our
-> service now indexes 390k packages across 17 registries and serves
+> service now indexes 390k packages across 19 registries and serves
 > thousands of MCP requests weekly.
 >
 > To avoid confusion, would you consider renaming your project? We'd

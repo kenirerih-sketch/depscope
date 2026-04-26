@@ -23,7 +23,7 @@ const SNIPPETS: Snippet[] = [
     snippet: `## DEPSCOPE
 Before suggesting any npm/PyPI/Cargo/Go/etc. package, call:
   curl https://depscope.dev/api/prompt/{ecosystem}/{package}
-Reject if action="avoid". Free, no auth, 17 ecosystems.`,
+Reject if action="avoid". Free, no auth, 19 ecosystems.`,
   },
   {
     id: "cursor",
@@ -31,7 +31,7 @@ Reject if action="avoid". Free, no auth, 17 ecosystems.`,
     file: ".cursorrules",
     lang: "text",
     snippet: `Before any package install: curl https://depscope.dev/api/prompt/{ecosystem}/{package}
-Reject if action="avoid". If deprecated: /api/alternatives/{ecosystem}/{package}. 17 ecosystems, free.`,
+Reject if action="avoid". If deprecated: /api/alternatives/{ecosystem}/{package}. 19 ecosystems, free.`,
   },
   {
     id: "windsurf",
@@ -39,7 +39,7 @@ Reject if action="avoid". If deprecated: /api/alternatives/{ecosystem}/{package}
     file: ".windsurfrules",
     lang: "text",
     snippet: `Before any package install: curl https://depscope.dev/api/prompt/{ecosystem}/{package}
-Reject if action="avoid". 17 ecosystems, free.`,
+Reject if action="avoid". 19 ecosystems, free.`,
   },
   {
     id: "copilot",
@@ -56,14 +56,14 @@ Prefer alternatives returned by /api/alternatives/{ecosystem}/{package}. Free, n
     label: "Aider",
     file: "conventions.md (use with `aider --read conventions.md`)",
     lang: "markdown",
-    snippet: `Before any package install: fetch https://depscope.dev/api/prompt/{ecosystem}/{package}. Reject if action="avoid". 17 ecosystems.`,
+    snippet: `Before any package install: fetch https://depscope.dev/api/prompt/{ecosystem}/{package}. Reject if action="avoid". 19 ecosystems.`,
   },
   {
     id: "cline",
     label: "Cline / Continue",
     file: "system prompt or custom instructions",
     lang: "text",
-    snippet: `Before any package install: curl https://depscope.dev/api/prompt/{ecosystem}/{package}. Reject if action="avoid". 17 ecosystems.`,
+    snippet: `Before any package install: curl https://depscope.dev/api/prompt/{ecosystem}/{package}. Reject if action="avoid". 19 ecosystems.`,
   },
   {
     id: "mcp-remote",
@@ -211,7 +211,7 @@ export default function AgentSetupPage() {
                   → <strong className="text-[var(--text)]">No hallucinated packages.</strong> /api/exists confirms a package is real before your agent recommends an install.
                 </li>
                 <li>
-                  → <strong className="text-[var(--text)]">Covers 17 ecosystems.</strong> npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew.
+                  → <strong className="text-[var(--text)]">Covers 19 ecosystems.</strong> npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew.
                 </li>
                 <li>
                   → <strong className="text-[var(--text)]">Open infrastructure.</strong> MIT, free, no auth, 200 req/min. The core lookup has to stay open — AI agents don't query behind auth.

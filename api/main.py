@@ -4278,7 +4278,7 @@ async def mcp_manifest():
         "description": (
             "Package Intelligence for AI agents. Check health, vulnerabilities, "
             "typosquats, malicious flags, alternatives, known bugs, breaking "
-            "changes, compat, error-to-fix across 17 ecosystems. 31k+ packages, "
+            "changes, compat, error-to-fix across 19 ecosystems. 31k+ packages, "
             "2.2k+ CVEs enriched with CISA KEV + EPSS. Zero auth, MIT."
         ),
         "vendor": {"name": "Cuttalo srl", "url": "https://depscope.dev",
@@ -4326,8 +4326,8 @@ async def ai_plugin():
         "schema_version": "v1",
         "name_for_human": "DepScope",
         "name_for_model": "depscope",
-        "description_for_human": "Check package health, vulnerabilities, error fixes and stack compatibility before installing. 17 ecosystems, MCP server (zero-install remote), 100% free.",
-        "description_for_model": "Use DepScope to check if a software package is safe, maintained, and up-to-date before suggesting it to install. Supports 17 ecosystems: npm, pypi, cargo, go, composer, maven, nuget, rubygems, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew. 31,000+ packages indexed, 2,200+ CVEs enriched with CISA KEV + EPSS, 22 MCP tools. Three verticals on one API: (1) package health via GET /api/check/{ecosystem}/{package} for full health report with vulns+score+recommendation, GET /api/prompt/{ecosystem}/{package} for LLM-optimized plain text (saves ~74% tokens), GET /api/compare/{ecosystem}/pkg1,pkg2 to compare, GET /api/alternatives/{ecosystem}/{package} for replacements, POST /api/scan to audit dependency lists. (2) error -> fix resolution via POST /api/error/resolve with a stack trace, GET /api/error?code=X for lookups. (3) stack compatibility via GET /api/compat?packages=next@16,react@19 to verify a combo before upgrading. Also GET /api/bugs/{ecosystem}/{package} for non-CVE known bugs per version. No authentication required for public endpoints. Optional API keys for higher limits. Completely free.",
+        "description_for_human": "Check package health, vulnerabilities, error fixes and stack compatibility before installing. 19 ecosystems, MCP server (zero-install remote), 100% free.",
+        "description_for_model": "Use DepScope to check if a software package is safe, maintained, and up-to-date before suggesting it to install. Supports 19 ecosystems: npm, pypi, cargo, go, composer, maven, nuget, rubygems, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew. 31,000+ packages indexed, 2,200+ CVEs enriched with CISA KEV + EPSS, 22 MCP tools. Three verticals on one API: (1) package health via GET /api/check/{ecosystem}/{package} for full health report with vulns+score+recommendation, GET /api/prompt/{ecosystem}/{package} for LLM-optimized plain text (saves ~74% tokens), GET /api/compare/{ecosystem}/pkg1,pkg2 to compare, GET /api/alternatives/{ecosystem}/{package} for replacements, POST /api/scan to audit dependency lists. (2) error -> fix resolution via POST /api/error/resolve with a stack trace, GET /api/error?code=X for lookups. (3) stack compatibility via GET /api/compat?packages=next@16,react@19 to verify a combo before upgrading. Also GET /api/bugs/{ecosystem}/{package} for non-CVE known bugs per version. No authentication required for public endpoints. Optional API keys for higher limits. Completely free.",
         "auth": {"type": "none"},
         "api": {"type": "openapi", "url": "https://depscope.dev/openapi.json"},
         "logo_url": "https://depscope.dev/logo.png",
@@ -4802,13 +4802,13 @@ async def openapi_for_gpt():
         "openapi": "3.1.0",
         "info": {
             "title": "DepScope",
-            "summary": "Package Intelligence for AI agents — health, vulns, typosquats, alternatives across 17 ecosystems.",
+            "summary": "Package Intelligence for AI agents — health, vulns, typosquats, alternatives across 19 ecosystems.",
             "description": (
                 "DepScope answers the questions AI coding agents keep getting wrong "
                 "when they install dependencies: does the package exist, is it "
                 "malicious or a typosquat, is it actively exploited (CISA KEV), is "
                 "it deprecated, what are the safe alternatives, what breaks when "
-                "upgrading v1→v2. 31,000+ packages across 17 ecosystems, "
+                "upgrading v1→v2. 31,000+ packages across 19 ecosystems, "
                 "2,200+ CVEs enriched with EPSS + CISA KEV. Zero auth, 100 req/min "
                 "anonymous, MIT.\n\n"
                 "USAGE RULES FOR THE MODEL:\n"

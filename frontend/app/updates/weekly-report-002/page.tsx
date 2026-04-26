@@ -43,7 +43,7 @@ export default function Page() {
       <PageHeader
         eyebrow={`Weekly Report #002 · Published ${DATE_PUBLISHED}`}
         title="The State of Package Health"
-        description={`Snapshot of ${fmt(TOTAL_PACKAGES)} packages across 17 ecosystems.`}
+        description={`Snapshot of ${fmt(TOTAL_PACKAGES)} packages across 19 ecosystems.`}
         actions={<Badge variant="info">Weekly</Badge>}
       />
       <Section>

@@ -128,21 +128,21 @@ const SETUP_TABS = [
     snippet: `## DEPSCOPE
 Before suggesting any npm/PyPI/Cargo/Go/etc. package, call:
   curl https://depscope.dev/api/prompt/{ecosystem}/{package}
-Reject if action="avoid". Free, no auth, 17 ecosystems.`,
+Reject if action="avoid". Free, no auth, 19 ecosystems.`,
   },
   {
     id: "cursor",
     label: "Cursor",
     file: ".cursorrules",
     snippet: `Before any package install: curl https://depscope.dev/api/prompt/{ecosystem}/{package}
-Reject if action="avoid". If deprecated: /api/alternatives/{ecosystem}/{package}. 17 ecosystems, free.`,
+Reject if action="avoid". If deprecated: /api/alternatives/{ecosystem}/{package}. 19 ecosystems, free.`,
   },
   {
     id: "windsurf",
     label: "Windsurf",
     file: ".windsurfrules",
     snippet: `Before any package install: curl https://depscope.dev/api/prompt/{ecosystem}/{package}
-Reject if action="avoid". 17 ecosystems, free.`,
+Reject if action="avoid". 19 ecosystems, free.`,
   },
   {
     id: "copilot",
@@ -156,7 +156,7 @@ Reject if action="avoid". Alternatives: /api/alternatives/{ecosystem}/{package}.
     id: "aider",
     label: "Aider",
     file: "conventions.md + aider --read",
-    snippet: `Before any package install: fetch https://depscope.dev/api/prompt/{ecosystem}/{package}. Reject if action="avoid". 17 ecosystems.`,
+    snippet: `Before any package install: fetch https://depscope.dev/api/prompt/{ecosystem}/{package}. Reject if action="avoid". 19 ecosystems.`,
   },
   {
     id: "mcp",
@@ -197,7 +197,7 @@ curl https://depscope.dev/api/check/npm/express
 # Live CVE lookup only
 curl https://depscope.dev/api/vulns/npm/express
 
-# 17 ecosystems: npm, pypi, cargo, go, maven, nuget, rubygems, composer, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew`,
+# 19 ecosystems: npm, pypi, cargo, go, maven, nuget, rubygems, composer, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew`,
   },
 ];
 

@@ -486,7 +486,7 @@ const INITIAL_ACTIONS: ActionItem[] = [
     area: "growth",
     title: "Articoli Dev.to + Medium (3 pezzi tecnici su dataset uniqueness)",
     detail:
-      "\"I scanned 31k packages across 17 ecosystems, here's what I found\" / \"Cross-ecosystem typosquat is a real threat\" / \"Building agent-native package intel with MCP\". Long-tail SEO permanente + pitch indiretto.",
+      "\"I scanned 31k packages across 19 ecosystems, here's what I found\" / \"Cross-ecosystem typosquat is a real threat\" / \"Building agent-native package intel with MCP\". Long-tail SEO permanente + pitch indiretto.",
     impact: "medium",
     effort: "M",
     owner: "Vincenzo",
@@ -814,7 +814,7 @@ export default function AdminPlanPage() {
           <h2 className="text-lg font-semibold mb-3">Cosa vendiamo quando vendiamo</h2>
           <div className="space-y-3 text-sm text-[var(--text)] leading-relaxed">
             <p>
-              <strong>1. Dataset curato cross-ecosystem</strong> — 17 ecosistemi, ~150k pacchetti attesi in 12 mesi,
+              <strong>1. Dataset curato cross-ecosystem</strong> — 19 ecosistemi, ~150k pacchetti attesi in 12 mesi,
               signali proprietari (typosquat cross, maintainer trust, cooccurrence). Il codice sorgente è replicabile in 6 mesi;
               i dati no. Il moat è qui.
             </p>

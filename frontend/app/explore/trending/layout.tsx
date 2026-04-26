@@ -3,14 +3,14 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Trending Packages — What AI Agents Install Now | DepScope",
   description:
-    "Live trending packages across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, more). See weekly growth, rank changes, and what AI coding agents install right now.",
+    "Live trending packages across 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, more). See weekly growth, rank changes, and what AI coding agents install right now.",
   keywords: [
     "trending npm packages", "trending python packages", "trending rust crates",
     "most installed packages this week", "ai agent popular packages",
   ],
   openGraph: {
     title: "Trending Packages — DepScope",
-    description: "What AI agents install right now. Live rank across 17 ecosystems.",
+    description: "What AI agents install right now. Live rank across 19 ecosystems.",
     url: "https://depscope.dev/explore/trending",
     siteName: "DepScope",
     type: "website",
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Trending Packages — DepScope",
-    description: "Live rank across 17 ecosystems.",
+    description: "Live rank across 19 ecosystems.",
   },
   alternates: {
     canonical: "https://depscope.dev/explore/trending",

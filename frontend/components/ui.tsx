@@ -322,7 +322,7 @@ export function Footer() {
         <div>
           <div className="font-mono font-semibold text-[var(--text)] mb-2">DepScope</div>
           <p className="text-xs leading-relaxed">
-            Package intelligence for AI agents. Free, no auth, 17 ecosystems.
+            Package intelligence for AI agents. Free, no auth, 19 ecosystems.
           </p>
         </div>
         <div>
