@@ -2,6 +2,14 @@
 
 # DepScope
 
+
+[![npm](https://img.shields.io/npm/v/depscope-mcp?label=depscope-mcp)](https://www.npmjs.com/package/depscope-mcp)
+[![downloads](https://img.shields.io/npm/dm/depscope-mcp)](https://www.npmjs.com/package/depscope-mcp)
+[![Glama Quality](https://img.shields.io/badge/Glama-AAA-success)](https://glama.ai/mcp/servers/cuttalo/depscope)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-Compatible-purple)](https://modelcontextprotocol.io)
+[![19 ecosystems](https://img.shields.io/badge/ecosystems-19-blue)](https://depscope.dev/coverage)
+
 **Package Intelligence for AI Agents**
 
 One free API. **19 ecosystems** (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew, **JSR, Julia**). Live OSV + KEV + EPSS. CC0 Hallucination Benchmark. Real-time malicious stream.
