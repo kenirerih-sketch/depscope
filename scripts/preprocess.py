@@ -153,7 +153,7 @@ async def preprocess_ecosystem(ecosystem: str, names: list[str]) -> int:
         if result:
             score = result["health"]["score"]
             vulns = result["vulnerabilities"]["count"]
-            downloads = result.get("downloads_weekly", 0)
+            downloads = result.get("downloads_weekly") or 0
             print(f"  {ecosystem}/{name}: health={score}/100, vulns={vulns}, downloads={downloads:,}")
             success += 1
         else:
