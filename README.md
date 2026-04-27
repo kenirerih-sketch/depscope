@@ -176,7 +176,7 @@ Before any install: curl depscope.dev/api/check/{eco}/{pkg} — no auth, free
 
 **ChatGPT** — search "DepScope" in the GPT Store.
 
-### MCP — 29 tools, zero install
+### MCP — 22 tools, zero install
 
 Add to your Claude Desktop / Cursor / Windsurf config:
 
@@ -196,7 +196,7 @@ Or install the stdio transport locally:
 npm install -g depscope-mcp
 ```
 
-Tool surface (29 tools, soon consolidating to a tighter 15-18):
+Tool surface (22 tools, soon consolidating to a tighter 15-18):
 `ai_brief`, `audit_stack`, `get_migration_path`, `check_package`, `get_health_score`, `get_vulnerabilities`, `get_latest_version`, `package_exists`, `get_package_prompt`, `compare_packages`, `scan_project`, `find_alternatives`, `get_breaking_changes`, `get_known_bugs`, `check_compatibility`, `resolve_error`, `search_errors`, `check_malicious`, `check_typosquat`, `get_scorecard`, `get_maintainer_trust`, `get_quality`, `get_provenance`, `get_trending`, `report_anomaly`, `contact_depscope`, `check_bulk`, `install_command`, `pin_safe`.
 
 ---
@@ -264,7 +264,7 @@ Stage mirror runs side-by-side on different ports behind HTTP basic auth (see `e
 
 ## Ecosystem
 
-- **MCP Remote** (29 tools, zero install): `https://mcp.depscope.dev/mcp`
+- **MCP Remote** (22 tools, zero install): `https://mcp.depscope.dev/mcp`
 - **MCP Server** (stdio): [`depscope-mcp` on npm](https://www.npmjs.com/package/depscope-mcp)
 - **ChatGPT GPT**: search "DepScope" in the GPT Store
 - **RapidAPI**: [hub listing](https://rapidapi.com/depscope/api/depscope)
