@@ -116,9 +116,14 @@ async def main():
         for eco_row in ecos:
             eco = eco_row["ecosystem"]
             pkgs = await conn.fetch("""
-                SELECT name, repository FROM packages
-                WHERE ecosystem=$1 AND repository IS NOT NULL AND repository ILIKE '%github.com%'
-                ORDER BY downloads_weekly DESC NULLS LAST
+                -- v2:freshness-aware maintainer
+                SELECT p.name, p.repository FROM packages p
+                LEFT JOIN maintainer_signals ms
+                  ON ms.ecosystem=p.ecosystem AND ms.package_name=p.name
+                WHERE p.ecosystem=$1
+                  AND p.repository IS NOT NULL AND p.repository ILIKE '%github.com%'
+                  AND (ms.updated_at IS NULL OR ms.updated_at < NOW() - INTERVAL '14 days')
+                ORDER BY p.downloads_weekly DESC NULLS LAST
                 LIMIT $2
             """, eco, PER_ECOSYSTEM_LIMIT)
             eco_count = 0

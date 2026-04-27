@@ -399,33 +399,45 @@ async def check_compat(stack: dict) -> dict:
         similar = await find_similar_stacks(packages, limit=5)
 
         # Detect major version mismatch between requested stack and similar stacks.
-        # If similar stacks use different major versions for any requested package,
-        # signal this explicitly so the agent does not infer safety.
+        # 'latest'/'any'/'*' in a similar stack = supports any major (don't flag).
+        # Only flag mismatch when ALL similar stacks use a DIFFERENT concrete major.
         major_mismatches = []
+        _ANY_CONSTRAINTS = {"latest", "*", "any", "next", ""}
         for pkg, version in packages.items():
             req_major = _extract_major(version)
             if req_major is None:
                 continue
-            similar_majors = set()
+            similar_majors_diff = set()
+            similar_supports_req = False
             for sim in similar:
                 sp = sim.get("packages") or {}
+                raw = None
                 if isinstance(sp, dict):
                     if pkg in sp:
-                        mm = _extract_major(sp[pkg])
-                        if mm is not None:
-                            similar_majors.add(mm)
+                        raw = sp[pkg]
                 elif isinstance(sp, list):
                     for item in sp:
                         if isinstance(item, dict) and item.get("name") == pkg:
-                            mm = _extract_major(item.get("version", ""))
-                            if mm is not None:
-                                similar_majors.add(mm)
-            similar_majors.discard(req_major)
-            if similar_majors:
+                            raw = item.get("version", "")
+                            break
+                if raw is None:
+                    continue
+                raw_str = str(raw).strip().lower()
+                if raw_str in _ANY_CONSTRAINTS:
+                    similar_supports_req = True
+                    continue
+                mm = _extract_major(raw)
+                if mm is None:
+                    continue
+                if mm == req_major:
+                    similar_supports_req = True
+                else:
+                    similar_majors_diff.add(mm)
+            if similar_majors_diff and not similar_supports_req:
                 major_mismatches.append({
                     "package": pkg,
                     "requested_major": req_major,
-                    "similar_stacks_majors": sorted(similar_majors),
+                    "similar_stacks_majors": sorted(similar_majors_diff),
                 })
 
         warning = None

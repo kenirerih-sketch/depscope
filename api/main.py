@@ -127,6 +127,7 @@ from api.historical_compromises import lookup as lookup_historical
 from api.stdlib_modules import lookup as lookup_stdlib
 from api.verticals_v2 import router as verticals_v2_router
 from api.auth import router as auth_router, _get_user_from_request
+from api.missions import router as missions_router
 from api.payments import router as payments_router
 from api.mcp_http import mcp_router
 from api.history import get_history
@@ -629,6 +630,7 @@ async def _origin_cache_control(request, call_next):
 
 
 app.include_router(auth_router)
+app.include_router(missions_router)
 app.include_router(payments_router)
 app.include_router(mcp_router)
 app.include_router(verticals_v2_router)
@@ -1255,10 +1257,26 @@ async def _augment_check(conn, ecosystem, package, payload):
         FROM typosquat_candidates
         WHERE ecosystem=$1 AND LOWER(suspect)=LOWER($2) ORDER BY distance LIMIT 3
     """, ecosystem, package)
-    if ts:
+    # Bug #17: filter out corrupted targets (e.g. 'torch/' with embedded '/').
+    valid_ts = [r for r in ts if r["legitimate"] and "/" not in r["legitimate"]]
+    # Bug #20: drop typosquat suspicion when SUSPECT itself has high weekly
+    # downloads (>10k) — both packages are likely legitimate and just share
+    # similar names (e.g. is-array vs isarray, both real).
+    suspect_dl = 0
+    try:
+        suspect_dl_row = await conn.fetchrow(
+            "SELECT downloads_weekly FROM packages WHERE ecosystem=$1 AND LOWER(name)=LOWER($2)",
+            ecosystem, package,
+        )
+        suspect_dl = (suspect_dl_row or {}).get("downloads_weekly") or 0
+    except Exception:
+        suspect_dl = 0
+    if suspect_dl >= 10000:
+        valid_ts = []  # suspect is itself an established package
+    if valid_ts:
         payload["typosquat"] = {
             "is_suspected": True,
-            "targets": [{"legitimate_package": r["legitimate"], "distance": r["distance"], "reason": r["reason"]} for r in ts],
+            "targets": [{"legitimate_package": r["legitimate"], "distance": r["distance"], "reason": r["reason"]} for r in valid_ts],
         }
     else:
         payload["typosquat"] = {"is_suspected": False}
@@ -1882,10 +1900,17 @@ async def get_migration_path(ecosystem: str, from_pkg: str, to_pkg: str):
     if not from_data or not to_data:
         raise HTTPException(404, f"Cannot build migration: one of the packages was not found in {ecosystem}")
     from_dep = (from_data.get("health") or {}).get("deprecated", False)
+    to_dep = (to_data.get("health") or {}).get("deprecated", False)
     rationale_parts = []
     if from_dep:
         rationale_parts.append(f"{from_pkg} is deprecated")
-    rationale_parts.append(f"{to_pkg} is actively maintained ({to_data.get('downloads_weekly', 0):,} weekly downloads)")
+    if to_dep:
+        rationale_parts.append(
+            f"WARNING: target {to_pkg} is also deprecated/in maintenance mode. "
+            f"This is NOT a recommended migration. Consider an actively maintained alternative."
+        )
+    else:
+        rationale_parts.append(f"{to_pkg} is actively maintained ({to_data.get('downloads_weekly', 0):,} weekly downloads)")
     return {
         "ecosystem": ecosystem,
         "from": from_pkg,
@@ -2071,6 +2096,15 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
     if ecosystem not in ("npm", "pypi", "cargo", "go", "composer", "maven", "nuget", "rubygems", "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew", "jsr", "julia"):
         raise HTTPException(400, f"Unsupported ecosystem: {ecosystem}. Supported: npm, pypi, cargo, go, composer, maven, nuget, rubygems, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew, jsr, julia")
 
+    # Bug #6: input validation on package name.
+    pkg_clean = (package or "").strip()
+    if not pkg_clean:
+        raise HTTPException(400, "Package name cannot be empty")
+    if ".." in pkg_clean or pkg_clean.startswith((".", "/", "-")) or "\\" in pkg_clean:
+        raise HTTPException(400, f"Invalid package name: {package!r}")
+    if len(pkg_clean) > 214:
+        raise HTTPException(400, "Package name too long (max 214 chars)")
+
     stdlib_hint = lookup_stdlib(ecosystem, package)
     if stdlib_hint:
         return {
@@ -2098,7 +2132,26 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
                    status_code=200, endpoint="check")
         return cached
 
-    result = await _fetch_full_package(ecosystem, package, requested_version=version)
+    # Bugs #10/#11: normalize dist-tags and semver ranges so version-scoped
+    # vuln filter doesn't compare 'latest' or '^18.0.0' as literal versions.
+    _DIST_TAGS = {"latest", "next", "beta", "alpha", "rc", "stable", "current",
+                  "canary", "experimental", "*", "any", ""}
+    version_kind = "literal"
+    resolved_for_lookup = version
+    if version:
+        v_low = version.strip().lower()
+        if v_low in _DIST_TAGS:
+            version_kind = "dist_tag"
+            resolved_for_lookup = None  # don't build version_scoped for dist-tags
+        elif version[:1] in ("^", "~", "="):
+            version_kind = "range"
+            resolved_for_lookup = version[1:].strip() if version[:2] != ">=" else None
+            if not resolved_for_lookup or any(c in resolved_for_lookup for c in (" ", ">", "<", "|", ",")):
+                resolved_for_lookup = None
+        elif any(op in version for op in (">=", "<=", ">", "<", "||", " ", ",")):
+            version_kind = "range"
+            resolved_for_lookup = None  # complex range — skip version-scoped
+    result = await _fetch_full_package(ecosystem, package, requested_version=resolved_for_lookup)
     if not result:
         _log_usage(ecosystem, package, request,
                    response_time_ms=int((time.time() - start) * 1000),
@@ -2239,12 +2292,57 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
                 f"Name matches {len(hc_info)} historical supply-chain incident(s) "
                 "even though not currently in the registry — check affected_versions."
             )
+        await _log_query_miss(ecosystem, package, "ingest")
         raise HTTPException(404, detail)
 
     result["requested_version"] = version
+    if version and version_kind != "literal":
+        result["requested_version_kind"] = version_kind
+        result["requested_version_resolved"] = resolved_for_lookup or result.get("latest_version")
     result["_cache"] = "miss"
     result["_response_ms"] = int((time.time() - start) * 1000)
     result["_powered_by"] = "depscope.dev — free package intelligence for AI agents"
+
+    # Bug #3 fix: flag hallucinated versions (major > latest+2 or > 100).
+    # Conservative: only flag when clearly impossible, never false-positive on real older releases.
+    if version:
+        try:
+            latest = (result.get("latest_version") or "").strip()
+            recent = (result.get("versions") or {}).get("recent", []) or []
+            ver_in_known = (version == latest) or (version in recent)
+            ver_str = version.lstrip("vV=^~ ").split("-")[0].split("+")[0]
+            req_major_s = ver_str.split(".")[0]
+            lat_major_s = latest.lstrip("vV=^~ ").split("-")[0].split("+")[0].split(".")[0]
+            req_major = int(req_major_s) if req_major_s.isdigit() else None
+            lat_major = int(lat_major_s) if lat_major_s.isdigit() else None
+            hallucinated = False
+            if not ver_in_known and req_major is not None:
+                if req_major > 100:
+                    hallucinated = True  # 99.99.99 etc.
+                elif lat_major is not None and req_major > lat_major + 2:
+                    hallucinated = True  # react@50.0.0 when latest is 19.x
+            if hallucinated:
+                result["version_exists"] = False
+                result["recommendation"] = {
+                    "action": "do_not_use",
+                    "summary": (
+                        f"Version '{version}' looks hallucinated for {package}. "
+                        f"Latest stable is {latest or 'unknown'}. "
+                        f"Likely AI-generated impossible version — do not install."
+                    ),
+                    "reason": "hallucinated_version",
+                }
+                # Bug #3b: align version_scoped — don't say 'safe_to_use' for hallucinated.
+                if isinstance(result.get("version_scoped"), dict):
+                    result["version_scoped"]["recommendation"] = {
+                        "action": "do_not_use",
+                        "summary": "Version does not exist — see top-level recommendation.",
+                        "reason": "hallucinated_version",
+                    }
+            elif ver_in_known:
+                result["version_exists"] = True
+        except Exception:
+            pass
 
     # Enrich with KEV/EPSS/typosquat/maintainer
     try:
@@ -2713,6 +2811,37 @@ async def check_typosquat(ecosystem: str, package: str):
                     })
             rows = real_suspects
             source = "runtime_levenshtein"
+        # v2:typosquat-cross-eco — wrong-registry detection when no in-eco match
+        if not rows:
+            x_eco = await conn.fetch("""
+                SELECT ecosystem AS legit_eco, LOWER(name) AS legitimate,
+                       downloads_weekly AS downloads_legit,
+                       levenshtein(LOWER($1), LOWER(name)) AS distance
+                FROM packages
+                WHERE ecosystem <> $2
+                  AND downloads_weekly > 5000000
+                  AND levenshtein(LOWER($1), LOWER(name)) <= 2
+                ORDER BY distance, downloads_weekly DESC
+                LIMIT 3
+            """, package, ecosystem)
+            cross_suspects = []
+            for r in x_eco:
+                cross_suspects.append({
+                    "suspect": package,
+                    "legitimate": r["legitimate"],
+                    "legitimate_ecosystem": r["legit_eco"],
+                    "distance": r["distance"],
+                    "downloads_suspect": 0,
+                    "downloads_legit": r["downloads_legit"],
+                    "reason": (
+                        f"Name within Levenshtein distance {r['distance']} of "
+                        f"popular {r['legit_eco']} package '{r['legitimate']}'. "
+                        f"Wrong registry?"
+                    ),
+                })
+            if cross_suspects:
+                rows = cross_suspects
+                source = "runtime_cross_ecosystem"
     if not rows:
         return {"package": package, "ecosystem": ecosystem, "is_suspected_typosquat": False, "targets": []}
     return {
@@ -2886,6 +3015,24 @@ async def get_scorecard(ecosystem: str, package: str):
     }
 
 
+
+async def _log_query_miss(ecosystem: str, package: str, miss_type: str):
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            await conn.execute(
+                """
+                INSERT INTO query_misses (ecosystem, package_name, miss_type)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (ecosystem, package_name, miss_type)
+                DO UPDATE SET miss_count = query_misses.miss_count + 1, last_seen = NOW()
+                """,
+                ecosystem, package, miss_type,
+            )
+    except Exception:
+        pass
+
+
 @app.get("/api/quality/{ecosystem}/{package:path}", tags=["packages"])
 async def get_quality(ecosystem: str, package: str):
     """Package quality signals: criticality score, download velocity, publish security (npm 2FA / PyPI Trusted Publishing)."""
@@ -2900,7 +3047,7 @@ async def get_quality(ecosystem: str, package: str):
             WHERE ecosystem=$1 AND LOWER(package_name)=LOWER($2)
         """, ecosystem, package)
     if not row:
-        return {"package": package, "ecosystem": ecosystem, "available": False}
+        await _log_query_miss(ecosystem, package, "quality"); return {"package": package, "ecosystem": ecosystem, "available": False}
     crit = float(row["criticality_score"]) if row["criticality_score"] is not None else None
     tier = None
     if crit is not None:
@@ -3189,6 +3336,7 @@ async def get_maintainer_signals(ecosystem: str, package: str):
             WHERE ecosystem=$1 AND package_name=$2
         """, ecosystem, package)
     if not row:
+        await _log_query_miss(ecosystem, package, "maintainers")
         return {"package": package, "ecosystem": ecosystem, "available": False, "reason": "not computed yet"}
     d = dict(row)
     for k in ("repo_created_at", "repo_pushed_at", "updated_at"):
@@ -3360,6 +3508,46 @@ async def resolve_error(request: Request):
     except Exception:
         exact = None
     if exact:
+        # Bug #8 guard: pattern-hash collisions (e.g. ModuleNotFoundError: <STR>
+        # collapses tensorflow / requests / numpy into the same hash).
+        # When caller provides context.package, demote the exact match if the
+        # stored solution does NOT mention the requested package.
+        _demote = False
+        try:
+            ctx_pkg = ""
+            if isinstance(context, dict):
+                ctx_pkg = str(context.get("package") or "").strip().lower()
+                if "/" in ctx_pkg:
+                    ctx_pkg = ctx_pkg.split("/", 1)[1]
+            if ctx_pkg and ctx_pkg in error_text.lower():
+                exact_blob = " ".join(
+                    str(exact.get(k) or "") for k in
+                    ("error_text", "error_pattern", "solution", "title", "description", "package")
+                ).lower()
+                if ctx_pkg not in exact_blob:
+                    _demote = True
+        except Exception:
+            _demote = False
+        if _demote:
+            try:
+                similar = await search_errors(normalize_error(error_text), limit=3)
+            except Exception:
+                similar = []
+            payload = {
+                "status": "similar_matches" if similar else "not_found",
+                "matches": similar,
+                "confidence": 0.5 if similar else 0.0,
+                "context": context,
+                "hash": h,
+                "note": (
+                    "Initial exact pattern-hash matched a different package's "
+                    "solution. Demoted to similar_matches because context.package "
+                    f"='{ctx_pkg}' is not in the stored solution."
+                ),
+                "_cache": "miss",
+            }
+            await cache_set(cache_key, payload, ttl=86400)
+            return payload
         payload = {
             "status": "exact_match",
             "solution": exact,
@@ -3688,7 +3876,7 @@ async def list_bugs_popular(limit: int = 100):
     return payload
 
 
-@app.get("/api/compare/{ecosystem}/{packages_csv}", tags=["packages"])
+@app.get("/api/compare/{ecosystem}/{packages_csv:path}", tags=["packages"])
 async def compare_packages(ecosystem: str, packages_csv: str, request: Request = None):
     """
     Compare 2+ packages side by side.
@@ -6924,6 +7112,19 @@ async def get_savings():
             "energy_saved_today_wh": round(today_energy_wh, 2),
             "co2_saved_grams": round(total_co2_g, 2),
             "time_saved_seconds": time_saved_seconds,
+        },
+        "_disclaimer": (
+            "tokens_saved, cost_saved_usd, energy_saved_wh, co2_saved_grams are theoretical "
+            "estimates: they assume each check would otherwise have triggered an LLM round-trip "
+            "with raw registry JSON (~8500 tokens). Actual savings depend on real usage pattern. "
+            "total_checks and today_checks are real (excludes bots)."
+        ),
+        "_assumptions": {
+            "tokens_per_raw_check": tokens_without,
+            "tokens_per_depscope_check": tokens_with,
+            "blended_cost_per_million_tokens_usd": cost_per_million,
+            "wh_per_1000_tokens": wh_per_1000_tokens,
+            "co2_grams_per_wh": 0.233,
         },
         "per_check": {
             "tokens_without": tokens_without,

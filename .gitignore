@@ -64,3 +64,11 @@ backups/
 *.sql
 *.sql.gz
 *.dump
+
+# Mission Control (private — kept out of public repo)
+api/missions.py
+scripts/missions/
+frontend/app/admin/missions/
+
+# Allow db migration files (override *.sql ignore)
+!db/migrations/*.sql

@@ -8,7 +8,7 @@
     "urllib2": {
       "kind": "python2_stdlib",
       "replacement": "urllib.request (Python 3 stdlib) or requests (PyPI)",
-      "note": "Python 2 stdlib module. Removed in Python 3 — use urllib.request for simple fetches or the `requests` package for ergonomic HTTP."
+      "note": "Python 2 stdlib module. Removed in Python 3 \u2014 use urllib.request for simple fetches or the `requests` package for ergonomic HTTP."
     },
     "urlparse": {
       "kind": "python2_stdlib",
@@ -22,12 +22,12 @@
     },
     "ConfigParser": {
       "kind": "python2_stdlib",
-      "replacement": "configparser (lowercase) — stdlib in Python 3",
+      "replacement": "configparser (lowercase) \u2014 stdlib in Python 3",
       "note": "Python 2 stdlib. In Python 3 the module is lowercase `configparser`."
     },
     "Queue": {
       "kind": "python2_stdlib",
-      "replacement": "queue (lowercase) — stdlib in Python 3",
+      "replacement": "queue (lowercase) \u2014 stdlib in Python 3",
       "note": "Python 2 stdlib. In Python 3 use lowercase `queue`."
     },
     "thread": {
@@ -40,51 +40,396 @@
       "replacement": "io.StringIO / io.BytesIO",
       "note": "Python 2 only. In Python 3 use `io.StringIO` (text) or `io.BytesIO` (bytes)."
     },
-    "md5": {"kind": "python2_stdlib", "replacement": "hashlib.md5"},
-    "sha": {"kind": "python2_stdlib", "replacement": "hashlib.sha1"},
-    "SocketServer": {"kind": "python2_stdlib", "replacement": "socketserver"},
-    "BaseHTTPServer": {"kind": "python2_stdlib", "replacement": "http.server"},
-    "SimpleHTTPServer": {"kind": "python2_stdlib", "replacement": "http.server"},
-    "CGIHTTPServer": {"kind": "python2_stdlib", "replacement": "http.server (CGIHTTPRequestHandler)"},
-    "Tkinter": {"kind": "python2_stdlib", "replacement": "tkinter (lowercase in Python 3)"},
-    "StringIO": {"kind": "python2_stdlib", "replacement": "io.StringIO"}
+    "md5": {
+      "kind": "python2_stdlib",
+      "replacement": "hashlib.md5"
+    },
+    "sha": {
+      "kind": "python2_stdlib",
+      "replacement": "hashlib.sha1"
+    },
+    "SocketServer": {
+      "kind": "python2_stdlib",
+      "replacement": "socketserver"
+    },
+    "BaseHTTPServer": {
+      "kind": "python2_stdlib",
+      "replacement": "http.server"
+    },
+    "SimpleHTTPServer": {
+      "kind": "python2_stdlib",
+      "replacement": "http.server"
+    },
+    "CGIHTTPServer": {
+      "kind": "python2_stdlib",
+      "replacement": "http.server (CGIHTTPRequestHandler)"
+    },
+    "Tkinter": {
+      "kind": "python2_stdlib",
+      "replacement": "tkinter (lowercase in Python 3)"
+    },
+    "StringIO": {
+      "kind": "python2_stdlib",
+      "replacement": "io.StringIO"
+    }
   },
   "npm": {
     "fs": {
       "kind": "node_builtin",
       "replacement": "node:fs (builtin, no install needed)",
-      "note": "Node.js core module. Use `import fs from 'node:fs'` or `const fs = require('fs')` — no npm install required."
+      "note": "Node.js core module. Use `import fs from 'node:fs'` or `const fs = require('fs')` \u2014 no npm install required."
     },
-    "path": {"kind": "node_builtin", "replacement": "node:path"},
-    "http": {"kind": "node_builtin", "replacement": "node:http"},
-    "https": {"kind": "node_builtin", "replacement": "node:https"},
-    "crypto": {"kind": "node_builtin", "replacement": "node:crypto"},
-    "os": {"kind": "node_builtin", "replacement": "node:os"},
-    "url": {"kind": "node_builtin", "replacement": "node:url (or the builtin URL global)"},
-    "util": {"kind": "node_builtin", "replacement": "node:util"},
-    "stream": {"kind": "node_builtin", "replacement": "node:stream"},
-    "events": {"kind": "node_builtin", "replacement": "node:events"},
-    "buffer": {"kind": "node_builtin", "replacement": "node:buffer (or the global Buffer)"},
-    "child_process": {"kind": "node_builtin", "replacement": "node:child_process"},
-    "readline": {"kind": "node_builtin", "replacement": "node:readline"},
-    "net": {"kind": "node_builtin", "replacement": "node:net"},
-    "tls": {"kind": "node_builtin", "replacement": "node:tls"},
-    "dns": {"kind": "node_builtin", "replacement": "node:dns"},
-    "zlib": {"kind": "node_builtin", "replacement": "node:zlib"},
-    "assert": {"kind": "node_builtin", "replacement": "node:assert"},
-    "process": {"kind": "node_builtin", "replacement": "node:process (or global process)"},
-    "querystring": {"kind": "node_builtin", "replacement": "node:querystring (prefer URLSearchParams)"},
-    "worker_threads": {"kind": "node_builtin", "replacement": "node:worker_threads"},
-    "perf_hooks": {"kind": "node_builtin", "replacement": "node:perf_hooks"}
+    "path": {
+      "kind": "node_builtin",
+      "replacement": "node:path"
+    },
+    "http": {
+      "kind": "node_builtin",
+      "replacement": "node:http"
+    },
+    "https": {
+      "kind": "node_builtin",
+      "replacement": "node:https"
+    },
+    "crypto": {
+      "kind": "node_builtin",
+      "replacement": "node:crypto"
+    },
+    "os": {
+      "kind": "node_builtin",
+      "replacement": "node:os"
+    },
+    "url": {
+      "kind": "node_builtin",
+      "replacement": "node:url (or the builtin URL global)"
+    },
+    "util": {
+      "kind": "node_builtin",
+      "replacement": "node:util"
+    },
+    "stream": {
+      "kind": "node_builtin",
+      "replacement": "node:stream"
+    },
+    "events": {
+      "kind": "node_builtin",
+      "replacement": "node:events"
+    },
+    "buffer": {
+      "kind": "node_builtin",
+      "replacement": "node:buffer (or the global Buffer)"
+    },
+    "child_process": {
+      "kind": "node_builtin",
+      "replacement": "node:child_process"
+    },
+    "readline": {
+      "kind": "node_builtin",
+      "replacement": "node:readline"
+    },
+    "net": {
+      "kind": "node_builtin",
+      "replacement": "node:net"
+    },
+    "tls": {
+      "kind": "node_builtin",
+      "replacement": "node:tls"
+    },
+    "dns": {
+      "kind": "node_builtin",
+      "replacement": "node:dns"
+    },
+    "zlib": {
+      "kind": "node_builtin",
+      "replacement": "node:zlib"
+    },
+    "assert": {
+      "kind": "node_builtin",
+      "replacement": "node:assert"
+    },
+    "process": {
+      "kind": "node_builtin",
+      "replacement": "node:process (or global process)"
+    },
+    "querystring": {
+      "kind": "node_builtin",
+      "replacement": "node:querystring (prefer URLSearchParams)"
+    },
+    "worker_threads": {
+      "kind": "node_builtin",
+      "replacement": "node:worker_threads"
+    },
+    "perf_hooks": {
+      "kind": "node_builtin",
+      "replacement": "node:perf_hooks"
+    }
   },
   "go": {
-    "fmt": {"kind": "go_stdlib", "replacement": "stdlib — just `import \"fmt\"`"},
-    "net/http": {"kind": "go_stdlib", "replacement": "stdlib — `import \"net/http\"`"},
-    "encoding/json": {"kind": "go_stdlib", "replacement": "stdlib — `import \"encoding/json\"`"},
-    "context": {"kind": "go_stdlib", "replacement": "stdlib — `import \"context\"`"},
-    "sync": {"kind": "go_stdlib", "replacement": "stdlib"},
-    "io": {"kind": "go_stdlib", "replacement": "stdlib"},
-    "os": {"kind": "go_stdlib", "replacement": "stdlib"},
-    "errors": {"kind": "go_stdlib", "replacement": "stdlib"}
+    "fmt": {
+      "kind": "go_stdlib",
+      "replacement": "stdlib \u2014 just `import \"fmt\"`"
+    },
+    "net/http": {
+      "kind": "go_stdlib",
+      "replacement": "stdlib \u2014 `import \"net/http\"`"
+    },
+    "encoding/json": {
+      "kind": "go_stdlib",
+      "replacement": "stdlib \u2014 `import \"encoding/json\"`"
+    },
+    "context": {
+      "kind": "go_stdlib",
+      "replacement": "stdlib \u2014 `import \"context\"`"
+    },
+    "sync": {
+      "kind": "go_stdlib",
+      "replacement": "stdlib"
+    },
+    "io": {
+      "kind": "go_stdlib",
+      "replacement": "stdlib"
+    },
+    "os": {
+      "kind": "go_stdlib",
+      "replacement": "stdlib"
+    },
+    "errors": {
+      "kind": "go_stdlib",
+      "replacement": "stdlib"
+    }
+  },
+  "pub": {
+    "flutter": {
+      "kind": "framework_sdk",
+      "replacement": "Use Flutter SDK directly (https://flutter.dev). Do NOT add 'flutter' as a dep in pubspec.yaml \u2014 use `flutter create`/`flutter pub`.",
+      "note": "Flutter is the framework itself, not a pub package. The 'flutter' pub package on pub.dev is a deprecated 2016 placeholder."
+    },
+    "sky_engine": {
+      "kind": "framework_sdk",
+      "replacement": "`sky_engine` ships with the Dart/Flutter SDK \u2014 no install required.",
+      "note": "Bundled with SDK."
+    },
+    "dart": {
+      "kind": "framework_sdk",
+      "replacement": "`dart` ships with the Dart/Flutter SDK \u2014 no install required.",
+      "note": "Bundled with SDK."
+    }
+  },
+  "swift": {
+    "SwiftUI": {
+      "kind": "apple_framework",
+      "replacement": "import SwiftUI \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "UIKit": {
+      "kind": "apple_framework",
+      "replacement": "import UIKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "Foundation": {
+      "kind": "apple_framework",
+      "replacement": "import Foundation \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "Combine": {
+      "kind": "apple_framework",
+      "replacement": "import Combine \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "CoreData": {
+      "kind": "apple_framework",
+      "replacement": "import CoreData \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "CoreGraphics": {
+      "kind": "apple_framework",
+      "replacement": "import CoreGraphics \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "CoreLocation": {
+      "kind": "apple_framework",
+      "replacement": "import CoreLocation \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "MapKit": {
+      "kind": "apple_framework",
+      "replacement": "import MapKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "AVFoundation": {
+      "kind": "apple_framework",
+      "replacement": "import AVFoundation \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "AVKit": {
+      "kind": "apple_framework",
+      "replacement": "import AVKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "WebKit": {
+      "kind": "apple_framework",
+      "replacement": "import WebKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "StoreKit": {
+      "kind": "apple_framework",
+      "replacement": "import StoreKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "HealthKit": {
+      "kind": "apple_framework",
+      "replacement": "import HealthKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "HomeKit": {
+      "kind": "apple_framework",
+      "replacement": "import HomeKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "GameKit": {
+      "kind": "apple_framework",
+      "replacement": "import GameKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "SpriteKit": {
+      "kind": "apple_framework",
+      "replacement": "import SpriteKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "SceneKit": {
+      "kind": "apple_framework",
+      "replacement": "import SceneKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "ARKit": {
+      "kind": "apple_framework",
+      "replacement": "import ARKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "Metal": {
+      "kind": "apple_framework",
+      "replacement": "import Metal \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "MetalKit": {
+      "kind": "apple_framework",
+      "replacement": "import MetalKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "CloudKit": {
+      "kind": "apple_framework",
+      "replacement": "import CloudKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "PassKit": {
+      "kind": "apple_framework",
+      "replacement": "import PassKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "UserNotifications": {
+      "kind": "apple_framework",
+      "replacement": "import UserNotifications \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "WidgetKit": {
+      "kind": "apple_framework",
+      "replacement": "import WidgetKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "BackgroundTasks": {
+      "kind": "apple_framework",
+      "replacement": "import BackgroundTasks \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "AppKit": {
+      "kind": "apple_framework",
+      "replacement": "import AppKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "Charts": {
+      "kind": "apple_framework",
+      "replacement": "import Charts \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "Observation": {
+      "kind": "apple_framework",
+      "replacement": "import Observation \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "Network": {
+      "kind": "apple_framework",
+      "replacement": "import Network \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "CryptoKit": {
+      "kind": "apple_framework",
+      "replacement": "import CryptoKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "OSLog": {
+      "kind": "apple_framework",
+      "replacement": "import OSLog \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "Accelerate": {
+      "kind": "apple_framework",
+      "replacement": "import Accelerate \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "CoreImage": {
+      "kind": "apple_framework",
+      "replacement": "import CoreImage \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "PhotoKit": {
+      "kind": "apple_framework",
+      "replacement": "import PhotoKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "MessageUI": {
+      "kind": "apple_framework",
+      "replacement": "import MessageUI \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "Photos": {
+      "kind": "apple_framework",
+      "replacement": "import Photos \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "Contacts": {
+      "kind": "apple_framework",
+      "replacement": "import Contacts \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "EventKit": {
+      "kind": "apple_framework",
+      "replacement": "import EventKit \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "Speech": {
+      "kind": "apple_framework",
+      "replacement": "import Speech \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "Vision": {
+      "kind": "apple_framework",
+      "replacement": "import Vision \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "AddressBook": {
+      "kind": "apple_framework",
+      "replacement": "import AddressBook \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "AdSupport": {
+      "kind": "apple_framework",
+      "replacement": "import AdSupport \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    },
+    "AppTrackingTransparency": {
+      "kind": "apple_framework",
+      "replacement": "import AppTrackingTransparency \u2014 bundled with iOS/macOS SDK, no SwiftPM dep needed.",
+      "note": "Apple system framework. Ships with the OS SDK, not a Swift Package Manager package."
+    }
   }
 }

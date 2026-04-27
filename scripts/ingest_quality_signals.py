@@ -11,10 +11,14 @@ SYSTEM_MAP = {"npm":"NPM","pypi":"PYPI","cargo":"CARGO","go":"GO","nuget":"NUGET
 async def ingest_criticality(conn, session, limit=1500):
     """Use deps.dev projectInsight to derive OSSF criticality-like score, fall back to synthetic."""
     rows = await conn.fetch("""
-        SELECT ecosystem, name, downloads_weekly, maintainers_count, first_published
-        FROM packages
-        WHERE downloads_weekly > 500
-        ORDER BY downloads_weekly DESC LIMIT $1
+        -- v2:freshness-aware criticality
+        SELECT p.ecosystem, p.name, p.downloads_weekly, p.maintainers_count, p.first_published
+        FROM packages p
+        LEFT JOIN package_quality pq
+          ON pq.ecosystem=p.ecosystem AND pq.package_name=p.name
+        WHERE p.downloads_weekly > 500
+          AND (pq.last_checked IS NULL OR pq.last_checked < NOW() - INTERVAL '14 days')
+        ORDER BY p.downloads_weekly DESC LIMIT $1
     """, limit)
     print(f"[crit] computing for {len(rows)} packages")
     import math
@@ -128,9 +132,13 @@ async def ingest_velocity(conn, session):
 async def ingest_npm_signed(conn, session, limit=800):
     """Check npm packument for dist.signatures (signed publishes require 2FA publish token)."""
     rows = await conn.fetch("""
-        SELECT name FROM packages
-        WHERE ecosystem='npm' AND downloads_weekly > 1000
-        ORDER BY downloads_weekly DESC LIMIT $1
+        -- v2:freshness-aware npm-publish-sec
+        SELECT p.name FROM packages p
+        LEFT JOIN package_quality pq
+          ON pq.ecosystem=p.ecosystem AND pq.package_name=p.name
+        WHERE p.ecosystem='npm' AND p.downloads_weekly > 1000
+          AND (pq.last_checked IS NULL OR pq.last_checked < NOW() - INTERVAL '14 days')
+        ORDER BY p.downloads_weekly DESC LIMIT $1
     """, limit)
     print(f"[npm-2fa] checking {len(rows)} packages")
     n = 0
@@ -180,9 +188,13 @@ async def ingest_npm_signed(conn, session, limit=800):
 async def ingest_pypi_trusted(conn, session, limit=600):
     """Check PyPI attestations (Trusted Publishing via OIDC)."""
     rows = await conn.fetch("""
-        SELECT name FROM packages
-        WHERE ecosystem='pypi' AND downloads_weekly > 1000
-        ORDER BY downloads_weekly DESC LIMIT $1
+        -- v2:freshness-aware pypi-publish-sec
+        SELECT p.name FROM packages p
+        LEFT JOIN package_quality pq
+          ON pq.ecosystem=p.ecosystem AND pq.package_name=p.name
+        WHERE p.ecosystem='pypi' AND p.downloads_weekly > 1000
+          AND (pq.last_checked IS NULL OR pq.last_checked < NOW() - INTERVAL '14 days')
+        ORDER BY p.downloads_weekly DESC LIMIT $1
     """, limit)
     print(f"[pypi-tp] checking {len(rows)} packages")
     n = 0

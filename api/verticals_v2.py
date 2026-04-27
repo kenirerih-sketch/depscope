@@ -565,6 +565,10 @@ async def pin_safe(
         "package": package,
         "latest_version": pkg_row["latest_version"],
         "recommended_version": recommended,
+        "warning": (
+            "no_compatible_version: no version satisfies the requested constraint with severity threshold; consider relaxing constraint or accepting higher severity"
+            if recommended is None else None
+        ),
         "min_severity_excluded": min_severity,
         "constraint": constraint,
         "include_prerelease": include_prerelease,

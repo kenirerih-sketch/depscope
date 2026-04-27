@@ -14,10 +14,14 @@ respond with a 200 payload including `{"kind": "...", "replacement": "...",
 from __future__ import annotations
 
 import json
+import sys
 from functools import lru_cache
 from pathlib import Path
 
 _DATA_FILE = Path(__file__).resolve().parent / "stdlib_modules.json"
+
+# Python 3 stdlib (Python 3.10+). Fallback for `os`, `sys`, `json`, `re`, etc.
+_PY3_STDLIB = set(getattr(sys, "stdlib_module_names", set()))
 
 
 @lru_cache(maxsize=1)
@@ -34,20 +38,29 @@ def _load() -> dict:
 def lookup(ecosystem: str, package: str) -> dict | None:
     """Return stdlib hint for ecosystem/package, or None if unknown.
 
-    Keys in the JSON are case-sensitive to preserve Python 2 module casing
-    (`ConfigParser`, `Tkinter`, `Queue`). Agents typically emit the exact
-    name, so we match case-sensitively first and fall back to a lowercase
-    match for forgiving lookup.
+    JSON keys are case-sensitive (Py2 names like `ConfigParser`, `Tkinter`).
+    Match case-sensitively first, then case-insensitively. For pypi, fall
+    back to Python 3 stdlib so `os`, `sys`, `json`, `re` etc. resolve.
     """
     if not ecosystem or not package:
         return None
-    bucket = _load().get(ecosystem.lower()) or {}
+    eco = ecosystem.lower()
+    bucket = _load().get(eco) or {}
     if package in bucket:
         return bucket[package]
     lower = package.lower()
     for name, entry in bucket.items():
         if name.lower() == lower:
             return entry
+    # Fallback: Python 3 stdlib
+    if eco == "pypi":
+        root = package.split(".")[0]
+        if root in _PY3_STDLIB or root.lower() in _PY3_STDLIB:
+            return {
+                "kind": "Python 3 standard library",
+                "replacement": f"import {package} directly — no install needed",
+                "note": "Built-in Python 3 stdlib module. AI agent likely hallucinated this as a pypi package.",
+            }
     return None
 
 

@@ -1,6 +1,6 @@
 {
   "name": "depscope-mcp",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "mcpName": "io.github.cuttalo/depscope",
   "description": "Package Intelligence MCP server for AI agents. Stops hallucinated/malicious package installs across 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew, JSR, Julia). 22 tools, free, zero-auth.",
   "main": "index.js",
