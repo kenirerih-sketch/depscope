@@ -1,0 +1,18 @@
+{
+  "shape": {
+    "_powered_by": "<str>",
+    "constraint": "^1.0.0",
+    "deprecated": false,
+    "ecosystem": "npm",
+    "include_prerelease": false,
+    "known_vuln_count": "<int>",
+    "latest_version": "<str>",
+    "min_severity_excluded": "critical",
+    "package": "moment",
+    "recommended_version": null,
+    "versions_checked": "<int>",
+    "walk": "<list>",
+    "warning": "<str:151>"
+  },
+  "status": 200
+}

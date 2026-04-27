@@ -1,0 +1,40 @@
+{
+  "shape": {
+    "_cache": "<str>",
+    "_response_ms": "<int>",
+    "caveats": {
+      "@types/react": [
+        "<str:44>",
+        "<list:nonempty>"
+      ],
+      "express": [
+        "higher_transitive_deps (28)",
+        "<list:nonempty>"
+      ]
+    },
+    "compared": "<int>",
+    "ecosystem": "npm",
+    "packages": [
+      {
+        "dependencies_count": "<int>",
+        "deprecated": false,
+        "downloads_weekly": "<int>",
+        "health_risk": "low",
+        "health_score": "<int>",
+        "last_published": "<str>",
+        "latest_version": "<str>",
+        "license": "<str>",
+        "maintainers_count": "<int>",
+        "package": "react",
+        "recommendation": "safe_to_use",
+        "vulnerabilities_count": "<int>",
+        "vulns_critical": "<int>",
+        "vulns_high": "<int>"
+      },
+      "<list:nonempty>"
+    ],
+    "winner": "react",
+    "winner_criterion": "<str:171>"
+  },
+  "status": 200
+}

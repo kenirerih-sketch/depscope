@@ -1,0 +1,18 @@
+{
+  "shape": {
+    "alternatives": [
+      {
+        "builtin": false,
+        "name": "dayjs",
+        "reason": "<str:55>"
+      },
+      "<list:nonempty>"
+    ],
+    "deprecated": false,
+    "deprecated_message": null,
+    "ecosystem": "npm",
+    "note": "<str>",
+    "package": "moment"
+  },
+  "status": 200
+}

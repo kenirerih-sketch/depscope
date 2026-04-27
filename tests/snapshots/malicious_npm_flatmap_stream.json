@@ -1,0 +1,26 @@
+{
+  "shape": {
+    "action": "do_not_install",
+    "advisory_id": "MAL-2025-20690",
+    "downloads_weekly": "<int>",
+    "ecosystem": "npm",
+    "historical_compromise": {
+      "incident_date": "2018-11-26",
+      "incident_type": "malicious_package",
+      "last_known_safe": null,
+      "references": "<list>",
+      "summary": "<str>",
+      "versions_affected": [
+        "0.1.1",
+        "<list:nonempty>"
+      ]
+    },
+    "is_malicious": true,
+    "note": "<NoneType>",
+    "package": "flatmap-stream",
+    "published_at": "2025-08-14T18:52:04+00:00",
+    "source": "<str>",
+    "summary": "<str>"
+  },
+  "status": 200
+}

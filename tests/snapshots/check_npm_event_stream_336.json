@@ -1,0 +1,115 @@
+{
+  "shape": {
+    "_cache": "<str>",
+    "_powered_by": "<str>",
+    "_response_ms": "<int>",
+    "bundle": {
+      "dependency_count": "<int>",
+      "gzip_kb": "<float>",
+      "has_js_module": "<bool>",
+      "has_side_effects": "<bool>",
+      "scoped": "<bool>",
+      "size_kb": "<float>",
+      "source": "<str>"
+    },
+    "commercial_use_notes": "<str>",
+    "description": "<str>",
+    "downloads_weekly": "<int>",
+    "ecosystem": "npm",
+    "health": {
+      "breakdown": "<dict>",
+      "deprecated": false,
+      "max_score": "<int>",
+      "risk": "high",
+      "score": "<int>"
+    },
+    "historical_compromise": {
+      "count": "<int>",
+      "incidents": [
+        {
+          "affected_versions": "<str>",
+          "incident_type": "compromised_maintainer",
+          "matches_current_version": true,
+          "refs": "<list>",
+          "summary": "<str>",
+          "year": "<int>"
+        },
+        "<list:nonempty>"
+      ],
+      "matches_current_version": true
+    },
+    "homepage": "<str>",
+    "known_issues": {
+      "bugs_count": "<int>",
+      "bugs_severity": "<dict>",
+      "link": "<NoneType>",
+      "scope": "<str>",
+      "status_breakdown": "<dict>"
+    },
+    "latest_version": "<str>",
+    "license": "<str>",
+    "license_risk": "<str>",
+    "maintainer_trust": {
+      "available": false
+    },
+    "malicious": {
+      "is_malicious": false
+    },
+    "metadata": "<dict>",
+    "package": "event-stream",
+    "quality": {
+      "available": false
+    },
+    "recommendation": {
+      "action": "do_not_use",
+      "issues": "<list>",
+      "summary": "<str>",
+      "use_version": "<NoneType>",
+      "version_hint": "<str>"
+    },
+    "repository": "<str>",
+    "requested_version": "3.3.6",
+    "scorecard": "<dict>",
+    "typescript": {
+      "has_types": "<bool>",
+      "score": "<int>",
+      "types_package": "<str>",
+      "types_source": "<str>"
+    },
+    "typosquat": {
+      "is_suspected": false
+    },
+    "version_scoped": {
+      "recommendation": {
+        "action": "do_not_use",
+        "issues": "<list>",
+        "summary": "<str>",
+        "use_version": "<str>",
+        "version_hint": "<str>"
+      },
+      "version": "3.3.6",
+      "vulnerabilities": {
+        "count": "<int>",
+        "critical": "<int>",
+        "details": "<list>",
+        "high": "<int>",
+        "low": "<int>",
+        "medium": "<int>"
+      }
+    },
+    "versions": {
+      "latest": "<str>",
+      "recent": "<list>",
+      "total_count": "<int>"
+    },
+    "vulnerabilities": {
+      "count": "<int>",
+      "critical": "<int>",
+      "details": "<list>",
+      "high": "<int>",
+      "low": "<int>",
+      "medium": "<int>"
+    }
+  },
+  "status": 200
+}

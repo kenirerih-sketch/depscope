@@ -1,0 +1,78 @@
+{
+  "shape": {
+    "_cache": "<str>",
+    "_powered_by": "<str>",
+    "_response_ms": "<int>",
+    "bundle": null,
+    "commercial_use_notes": "<str>",
+    "description": "<str>",
+    "downloads_weekly": "<NoneType>",
+    "ecosystem": "jsr",
+    "health": {
+      "breakdown": "<dict>",
+      "deprecated": false,
+      "max_score": "<int>",
+      "risk": "high",
+      "score": "<int>"
+    },
+    "historical_compromise": null,
+    "homepage": "<str>",
+    "known_issues": {
+      "bugs_count": "<int>",
+      "bugs_severity": "<dict>",
+      "link": "<NoneType>",
+      "scope": "<str>",
+      "status_breakdown": "<dict>"
+    },
+    "latest_version": "<str>",
+    "license": "<str>",
+    "license_risk": "<str>",
+    "maintainer_trust": {
+      "active_contributors_12m": "<int>",
+      "alerts": "<list>",
+      "available": true,
+      "bus_factor_3m": "<int>",
+      "is_archived": false,
+      "owner_account_age_days": "<int>",
+      "primary_author_ratio": "<float>",
+      "stars": "<int>"
+    },
+    "malicious": {
+      "is_malicious": false
+    },
+    "metadata": "<dict>",
+    "package": "@std/path",
+    "quality": {
+      "available": false
+    },
+    "recommendation": {
+      "action": "safe_to_use",
+      "issues": "<list>",
+      "summary": "<str>",
+      "use_version": "<str>",
+      "version_hint": "<NoneType>"
+    },
+    "repository": "<str>",
+    "requested_version": null,
+    "scorecard": "<dict>",
+    "typescript": null,
+    "typosquat": {
+      "is_suspected": false
+    },
+    "version_scoped": null,
+    "versions": {
+      "latest": "<str>",
+      "recent": "<list>",
+      "total_count": "<int>"
+    },
+    "vulnerabilities": {
+      "count": "<int>",
+      "critical": "<int>",
+      "details": "<list>",
+      "high": "<int>",
+      "low": "<int>",
+      "medium": "<int>"
+    }
+  },
+  "status": 200
+}

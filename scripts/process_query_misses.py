@@ -8,17 +8,18 @@ BATCH = int(os.environ.get("BATCH", "20"))
 
 
 async def ingest_package(eco: str, pkg: str) -> tuple[bool, str | None]:
-    """Auto-ingest: fetch from registry, save to DB. Returns (ok, error)."""
+    """Auto-ingest: delegate to api.main._fetch_full_package which already
+    orchestrates fetch + health + vulns + save_package_to_db (fire-and-forget).
+    Returns (ok, error)."""
     sys.path.insert(0, "/home/deploy/depscope")
     try:
-        from api.registries import fetch_package, save_package_to_db
-        from api.database import get_pool
-        data = await fetch_package(eco, pkg)
+        from api.main import _fetch_full_package
+        data = await _fetch_full_package(eco, pkg)
         if not data:
             return (False, "registry returned no data — confirmed not exists")
-        pool = await get_pool()
-        async with pool.acquire() as conn:
-            await save_package_to_db(conn, eco, pkg, data)
+        # _fetch_full_package schedules save via asyncio.create_task — give it
+        # a moment to land before we mark the row done.
+        await asyncio.sleep(0.5)
         return (True, None)
     except Exception as e:
         return (False, str(e)[:300])

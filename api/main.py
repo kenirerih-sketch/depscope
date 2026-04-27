@@ -125,6 +125,7 @@ from api.registries import fetch_package, fetch_vulnerabilities, save_package_to
 from api.health import calculate_health_score
 from api.historical_compromises import lookup as lookup_historical
 from api.stdlib_modules import lookup as lookup_stdlib
+from api.curated_signals import lookup_rename, is_maintenance_mode
 from api.verticals_v2 import router as verticals_v2_router
 from api.auth import router as auth_router, _get_user_from_request
 from api.missions import router as missions_router
@@ -1901,6 +1902,7 @@ async def get_migration_path(ecosystem: str, from_pkg: str, to_pkg: str):
         raise HTTPException(404, f"Cannot build migration: one of the packages was not found in {ecosystem}")
     from_dep = (from_data.get("health") or {}).get("deprecated", False)
     to_dep = (to_data.get("health") or {}).get("deprecated", False)
+    to_maint = is_maintenance_mode(ecosystem, to_pkg)
     rationale_parts = []
     if from_dep:
         rationale_parts.append(f"{from_pkg} is deprecated")
@@ -1908,6 +1910,11 @@ async def get_migration_path(ecosystem: str, from_pkg: str, to_pkg: str):
         rationale_parts.append(
             f"WARNING: target {to_pkg} is also deprecated/in maintenance mode. "
             f"This is NOT a recommended migration. Consider an actively maintained alternative."
+        )
+    elif to_maint:
+        rationale_parts.append(
+            f"WARNING: target {to_pkg} is in community-flagged maintenance mode. "
+            f"{to_maint} This is NOT a recommended migration."
         )
     else:
         rationale_parts.append(f"{to_pkg} is actively maintained ({to_data.get('downloads_weekly', 0):,} weekly downloads)")
@@ -2132,25 +2139,46 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
                    status_code=200, endpoint="check")
         return cached
 
-    # Bugs #10/#11: normalize dist-tags and semver ranges so version-scoped
-    # vuln filter doesn't compare 'latest' or '^18.0.0' as literal versions.
+    # Bugs #10/#11/#22/#29: normalize dist-tags, ranges, and v-prefix.
     _DIST_TAGS = {"latest", "next", "beta", "alpha", "rc", "stable", "current",
                   "canary", "experimental", "*", "any", ""}
+    _GARBAGE_VERSIONS = {"undefined", "null", "nan", "none", "true", "false", "void"}
     version_kind = "literal"
     resolved_for_lookup = version
+    garbage_version = False
     if version:
         v_low = version.strip().lower()
-        if v_low in _DIST_TAGS:
+        # #21: garbage tokens — explicit reject path.
+        if v_low in _GARBAGE_VERSIONS:
+            garbage_version = True
+            version_kind = "garbage"
+            resolved_for_lookup = None
+        elif v_low in _DIST_TAGS:
             version_kind = "dist_tag"
-            resolved_for_lookup = None  # don't build version_scoped for dist-tags
-        elif version[:1] in ("^", "~", "="):
-            version_kind = "range"
-            resolved_for_lookup = version[1:].strip() if version[:2] != ">=" else None
-            if not resolved_for_lookup or any(c in resolved_for_lookup for c in (" ", ">", "<", "|", ",")):
+            resolved_for_lookup = None
+        else:
+            # #22: leading v/V prefix.
+            if version[:1] in ("v", "V"):
+                resolved_for_lookup = version[1:].strip()
+            # Range prefixes.
+            if (resolved_for_lookup or "")[:1] in ("^", "~", "="):
+                version_kind = "range"
+                resolved_for_lookup = (resolved_for_lookup or "")[1:].strip()
+                if not resolved_for_lookup or any(_c in resolved_for_lookup for _c in (" ", ">", "<", "|", ",")):
+                    resolved_for_lookup = None
+            elif any(op in version for op in (">=", "<=", ">", "<", "||", " ", ",")):
+                version_kind = "range"
                 resolved_for_lookup = None
-        elif any(op in version for op in (">=", "<=", ">", "<", "||", " ", ",")):
-            version_kind = "range"
-            resolved_for_lookup = None  # complex range — skip version-scoped
+            # #29: X.x / X.X.x / bare numeric (e.g. '1', '5', '1.x', '1.2.x').
+            elif resolved_for_lookup and (
+                resolved_for_lookup.endswith(".x")
+                or resolved_for_lookup.endswith(".X")
+                or (resolved_for_lookup.isdigit() and len(resolved_for_lookup) <= 3)
+            ):
+                version_kind = "range"
+                resolved_for_lookup = resolved_for_lookup.replace(".x", "").replace(".X", "").strip()
+                if not resolved_for_lookup:
+                    resolved_for_lookup = None
     result = await _fetch_full_package(ecosystem, package, requested_version=resolved_for_lookup)
     if not result:
         _log_usage(ecosystem, package, request,
@@ -2161,14 +2189,27 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
         try:
             pool = await get_pool()
             async with pool.acquire() as conn:
+                # Strip non-alphanumeric (handles `tanstack-query` -> `tanstack`,
+                # `@scope/pkg` -> `scopepkg`) for cross-name fuzzy.
+                core_q = ''.join(ch for ch in package.lower() if ch.isalnum())
                 suggestions = await conn.fetch(
-                    """SELECT name, latest_version, health_score
-                       FROM packages
-                       WHERE ecosystem = $1
-                         AND LOWER(name) != LOWER($2)
-                       ORDER BY similarity(LOWER(name), LOWER($2)) DESC NULLS LAST
-                       LIMIT 5""",
-                    ecosystem, package,
+                    """
+                    WITH trigram AS (
+                        SELECT name, latest_version, health_score,
+                               GREATEST(
+                                   similarity(LOWER(name), LOWER($2)),
+                                   similarity(REGEXP_REPLACE(LOWER(name), '[^a-z0-9]', '', 'g'), $3)
+                               ) AS sim
+                        FROM packages
+                        WHERE ecosystem = $1 AND LOWER(name) != LOWER($2)
+                    )
+                    SELECT name, latest_version, health_score
+                    FROM trigram
+                    WHERE sim > 0.25
+                    ORDER BY sim DESC NULLS LAST, health_score DESC NULLS LAST
+                    LIMIT 5
+                    """,
+                    ecosystem, package, core_q,
                 )
         except Exception:
             # pg_trgm may not be enabled — fallback to LIKE with head/tail
@@ -2302,6 +2343,27 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
     result["_cache"] = "miss"
     result["_response_ms"] = int((time.time() - start) * 1000)
     result["_powered_by"] = "depscope.dev — free package intelligence for AI agents"
+    # Bug #12: surface canonical name when caller asked for a known squat/rename.
+    _rename = lookup_rename(ecosystem, package)
+    if _rename:
+        result["rename_suggestion"] = {
+            "from": package,
+            "to": _rename["to"],
+            "note": _rename.get("note"),
+            "source_url": _rename.get("source_url"),
+        }
+        # If the local pkg is low-health AND a rename target exists, override
+        # the recommendation to redirect the AI agent.
+        try:
+            health_score = (result.get("health") or {}).get("score") or 0
+        except Exception:
+            health_score = 0
+        if health_score < 40:
+            result["recommendation"] = {
+                "action": "use_canonical_alternative",
+                "summary": f"Use {_rename['to']} instead of {package}. {_rename.get('note','')}",
+                "reason": "renamed_or_squatted",
+            }
 
     # Bug #3 fix: flag hallucinated versions (major > latest+2 or > 100).
     # Conservative: only flag when clearly impossible, never false-positive on real older releases.
@@ -2343,6 +2405,22 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
                 result["version_exists"] = True
         except Exception:
             pass
+
+    # Bug #21: garbage version tokens — outside try/except so any earlier
+    # parse failure still triggers the override. Indented under /api/check.
+    if version and garbage_version:
+        result["version_exists"] = False
+        result["recommendation"] = {
+            "action": "do_not_use",
+            "summary": (
+                f"Version '{version}' is not a valid version literal "
+                f"(undefined/null/NaN). Likely a hallucinated or unset "
+                f"variable from an AI agent — do not install."
+            ),
+            "reason": "garbage_version_literal",
+        }
+        if isinstance(result.get("version_scoped"), dict):
+            result["version_scoped"]["recommendation"] = result["recommendation"]
 
     # Enrich with KEV/EPSS/typosquat/maintainer
     try:

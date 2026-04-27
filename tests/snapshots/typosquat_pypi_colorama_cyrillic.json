@@ -1,0 +1,21 @@
+{
+  "shape": {
+    "detection_source": "runtime_levenshtein",
+    "ecosystem": "pypi",
+    "is_suspected_typosquat": true,
+    "note": "<str>",
+    "package": "color\u0430ma",
+    "targets": [
+      {
+        "distance": "<int>",
+        "downloads_legit": "<int>",
+        "downloads_suspect": "<int>",
+        "legitimate_package": "colorama",
+        "popularity_ratio": "<float>",
+        "reason": "<str:52>"
+      },
+      "<list:nonempty>"
+    ]
+  },
+  "status": 200
+}

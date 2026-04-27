@@ -1,0 +1,12 @@
+{
+  "shape": {
+    "detail": {
+      "did_you_mean": "<list>",
+      "ecosystem": "npm",
+      "error": "package_not_found",
+      "message": "<str>",
+      "package": "mxyzpltkqi-fakelol-doesnotexist"
+    }
+  },
+  "status": 404
+}

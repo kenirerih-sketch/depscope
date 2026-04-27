@@ -1,0 +1,24 @@
+{
+  "shape": {
+    "_cache": "<str>",
+    "confidence": "high",
+    "match_type": "<str>",
+    "notes": "<str:66>",
+    "packages": {
+      "@types/node": "20.14.10",
+      "@types/react": "18.3.3",
+      "@types/react-dom": "18.3.0",
+      "next": "latest",
+      "react": "18.3.1",
+      "react-dom": "18.3.1",
+      "typescript": "5.5.3"
+    },
+    "reported_count": "<int>",
+    "source": "<str>",
+    "source_url": "<str>",
+    "stars": "<int>",
+    "status": "verified",
+    "updated_at": "<str>"
+  },
+  "status": 200
+}

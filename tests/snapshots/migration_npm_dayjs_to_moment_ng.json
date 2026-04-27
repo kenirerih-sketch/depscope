@@ -1,0 +1,19 @@
+{
+  "shape": {
+    "_note": "<str>",
+    "_source": "<str>",
+    "breaking_changes": [
+      "<str:65>",
+      "<list:nonempty>"
+    ],
+    "curated": false,
+    "diff_examples": [],
+    "ecosystem": "npm",
+    "effort_minutes": null,
+    "from": "dayjs",
+    "rationale": "<str:210>",
+    "references": "<list>",
+    "to": "moment"
+  },
+  "status": 200
+}

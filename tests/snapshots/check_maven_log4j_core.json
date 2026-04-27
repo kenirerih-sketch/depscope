@@ -1,0 +1,79 @@
+{
+  "shape": {
+    "_cache": "<str>",
+    "_powered_by": "<str>",
+    "_response_ms": "<int>",
+    "bundle": null,
+    "commercial_use_notes": "<str>",
+    "description": "<str>",
+    "downloads_weekly": "<NoneType>",
+    "ecosystem": "maven",
+    "health": {
+      "breakdown": "<dict>",
+      "deprecated": false,
+      "max_score": "<int>",
+      "risk": "high",
+      "score": "<int>"
+    },
+    "historical_compromise": null,
+    "homepage": "<str>",
+    "known_issues": {
+      "bugs_count": "<int>",
+      "bugs_severity": "<dict>",
+      "link": "<NoneType>",
+      "scope": "<str>",
+      "status_breakdown": "<dict>"
+    },
+    "latest_version": "<str>",
+    "license": "<str>",
+    "license_risk": "<str>",
+    "maintainer_trust": {
+      "available": false
+    },
+    "malicious": {
+      "is_malicious": false
+    },
+    "metadata": "<dict>",
+    "package": "<str:35>",
+    "quality": {
+      "available": false
+    },
+    "recommendation": {
+      "action": "safe_to_use",
+      "alternatives": [
+        {
+          "builtin": false,
+          "name": "org.slf4j:slf4j-api",
+          "reason": "<str:67>"
+        },
+        "<list:nonempty>"
+      ],
+      "issues": "<list>",
+      "summary": "<str>",
+      "use_version": "<str>",
+      "version_hint": "<NoneType>"
+    },
+    "repository": "<str>",
+    "requested_version": null,
+    "scorecard": "<dict>",
+    "typescript": null,
+    "typosquat": {
+      "is_suspected": false
+    },
+    "version_scoped": null,
+    "versions": {
+      "latest": "<str>",
+      "recent": "<list>",
+      "total_count": "<int>"
+    },
+    "vulnerabilities": {
+      "count": "<int>",
+      "critical": "<int>",
+      "details": "<list>",
+      "high": "<int>",
+      "low": "<int>",
+      "medium": "<int>"
+    }
+  },
+  "status": 200
+}

@@ -1,0 +1,17 @@
+{
+  "shape": {
+    "_source": "<str>",
+    "breaking_changes": "<str:246>",
+    "curated": true,
+    "curator": "depscope",
+    "diff_examples": "<str:742>",
+    "ecosystem": "npm",
+    "effort_minutes": "<int>",
+    "from": "request",
+    "rationale": "<str:140>",
+    "references": "<str>",
+    "to": "axios",
+    "updated_at": "<str>"
+  },
+  "status": 200
+}

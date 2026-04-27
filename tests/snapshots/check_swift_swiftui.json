@@ -1,0 +1,17 @@
+{
+  "shape": {
+    "_cache": "<str>",
+    "_powered_by": "<str>",
+    "_response_ms": "<int>",
+    "ecosystem": "swift",
+    "exists": false,
+    "hint": "<dict>",
+    "is_stdlib": true,
+    "package": "SwiftUI",
+    "recommendation": {
+      "action": "no_install_needed",
+      "summary": "<str>"
+    }
+  },
+  "status": 200
+}

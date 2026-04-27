@@ -1,0 +1,99 @@
+{
+  "shape": {
+    "_cache": "<str>",
+    "_powered_by": "<str>",
+    "_response_ms": "<int>",
+    "bundle": {
+      "dependency_count": "<int>",
+      "gzip_kb": "<float>",
+      "has_js_module": "<bool>",
+      "has_side_effects": "<bool>",
+      "scoped": "<bool>",
+      "size_kb": "<float>",
+      "source": "<str>"
+    },
+    "commercial_use_notes": "<str>",
+    "description": "<str>",
+    "downloads_weekly": "<int>",
+    "ecosystem": "npm",
+    "health": {
+      "breakdown": "<dict>",
+      "deprecated": false,
+      "max_score": "<int>",
+      "risk": "low",
+      "score": "<int>"
+    },
+    "historical_compromise": null,
+    "homepage": "<str>",
+    "known_issues": {
+      "bugs_count": "<int>",
+      "bugs_severity": "<dict>",
+      "details": "<list>",
+      "link": "<str>",
+      "scope": "<str>",
+      "status_breakdown": "<dict>"
+    },
+    "latest_version": "<str>",
+    "license": "<str>",
+    "license_risk": "<str>",
+    "maintainer_trust": {
+      "active_contributors_12m": "<int>",
+      "alerts": "<list>",
+      "available": true,
+      "bus_factor_3m": "<int>",
+      "is_archived": false,
+      "owner_account_age_days": "<int>",
+      "primary_author_ratio": "<float>",
+      "stars": "<int>"
+    },
+    "malicious": {
+      "is_malicious": false
+    },
+    "metadata": "<dict>",
+    "package": "react",
+    "quality": {
+      "available": true,
+      "criticality_score": "<float>",
+      "criticality_tier": "<str>",
+      "publish_security": "<str>",
+      "velocity_pct": "<float>",
+      "velocity_trend": "<str>"
+    },
+    "recommendation": {
+      "action": "safe_to_use",
+      "issues": "<list>",
+      "summary": "<str>",
+      "use_version": "<str>",
+      "version_hint": "<NoneType>"
+    },
+    "repository": "<str>",
+    "requested_version": "latest",
+    "requested_version_kind": "dist_tag",
+    "requested_version_resolved": "19.2.5",
+    "scorecard": "<dict>",
+    "typescript": {
+      "has_types": "<bool>",
+      "score": "<int>",
+      "types_package": "<str>",
+      "types_source": "<str>"
+    },
+    "typosquat": {
+      "is_suspected": false
+    },
+    "version_scoped": null,
+    "versions": {
+      "latest": "<str>",
+      "recent": "<list>",
+      "total_count": "<int>"
+    },
+    "vulnerabilities": {
+      "count": "<int>",
+      "critical": "<int>",
+      "details": "<list>",
+      "high": "<int>",
+      "low": "<int>",
+      "medium": "<int>"
+    }
+  },
+  "status": 200
+}

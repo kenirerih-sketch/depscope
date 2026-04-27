@@ -90,25 +90,27 @@ curl https://depscope.dev/api/check/{ecosystem}/{package}
 
 | Language | Ecosystem | Packages | Example |
 |----------|-----------|---------:|---------|
-| JavaScript / Node | `npm` | 12.708 | `/api/check/npm/express` |
-| Python | `pypi` | 4.731 | `/api/check/pypi/django` |
-| Rust | `cargo` | 4.170 | `/api/check/cargo/tokio` |
-| Perl | `cpan` | 2.683 | `/api/check/cpan/DateTime` |
-| Ruby | `rubygems` | 1.469 | `/api/check/rubygems/rails` |
-| PHP | `composer` | 917 | `/api/check/composer/laravel/framework` |
-| R | `cran` | 733 | `/api/check/cran/dplyr` |
-| .NET / C# | `nuget` | 719 | `/api/check/nuget/Newtonsoft.Json` |
-| macOS CLI | `homebrew` | 603 | `/api/check/homebrew/git` |
-| Java / Kotlin | `maven` | 503 | `/api/check/maven/org.springframework.boot/spring-boot-starter` |
-| Dart / Flutter | `pub` | 460 | `/api/check/pub/http` |
-| Go | `go` | 429 | `/api/check/go/github.com/gin-gonic/gin` |
-| Elixir | `hex` | 302 | `/api/check/hex/ecto` |
-| Haskell | `hackage` | 300 | `/api/check/hackage/lens` |
-| iOS | `cocoapods` | 139 | `/api/check/cocoapods/AFNetworking` |
-| Data Science | `conda` | 127 | `/api/check/conda/scipy` |
-| Swift | `swift` | 61 | `/api/check/swift/vapor` |
+| JavaScript / Node | `npm` | 312,964 | `/api/check/npm/express` |
+| Python | `pypi` | 97,349 | `/api/check/pypi/django` |
+| Dart / Flutter | `pub` | 76,724 | `/api/check/pub/http` |
+| PHP | `composer` | 45,918 | `/api/check/composer/laravel/framework` |
+| Perl | `cpan` | 43,102 | `/api/check/cpan/DateTime` |
+| Data Science | `conda` | 31,938 | `/api/check/conda/scipy` |
+| R | `cran` | 23,244 | `/api/check/cran/dplyr` |
+| Go | `go` | 23,079 | `/api/check/go/github.com/gin-gonic/gin` |
+| Rust | `cargo` | 20,945 | `/api/check/cargo/tokio` |
+| Elixir | `hex` | 19,269 | `/api/check/hex/ecto` |
+| Haskell | `hackage` | 18,914 | `/api/check/hackage/lens` |
+| Ruby | `rubygems` | 10,231 | `/api/check/rubygems/rails` |
+| macOS CLI | `homebrew` | 8,315 | `/api/check/homebrew/git` |
+| Swift | `swift` | 4,684 | `/api/check/swift/vapor` |
+| .NET / C# | `nuget` | 4,258 | `/api/check/nuget/Newtonsoft.Json` |
+| Java / Kotlin | `maven` | 692 | `/api/check/maven/org.springframework.boot/spring-boot-starter` |
+| iOS | `cocoapods` | 493 | `/api/check/cocoapods/AFNetworking` |
+| Scientific / ML | `julia` | 5 | `/api/check/julia/DataFrames` |
+| Deno / Bun TS | `jsr` | 3 | `/api/check/jsr/@std/path` |
 
-**Total: 31.054 packages, 2.282 tracked vulnerabilities, 595 curated alternatives.**
+**Total: 742,000+ packages, 17,290 tracked vulnerabilities, 724 curated alternatives, 14 historical supply-chain compromises.**
 
 ---
 
@@ -241,7 +243,7 @@ Pure math, no LLM in the hot path. Runs in milliseconds.
 
 **Key detail**: we only surface vulnerabilities that actually affect the latest version. Django goes from 272 historical "vulnerabilities" to just the ones that still matter today.
 
-Current average health across the 31k indexed packages: **60 / 100**.
+Current average health across the 742k indexed packages: **60 / 100**.
 
 ---
 

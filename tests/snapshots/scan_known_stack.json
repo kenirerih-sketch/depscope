@@ -1,0 +1,30 @@
+{
+  "shape": {
+    "_response_ms": "<int>",
+    "ecosystem": "npm",
+    "packages": [
+      {
+        "deprecated": false,
+        "downloads_weekly": "<int>",
+        "health_risk": "low",
+        "health_score": "<int>",
+        "latest_version": "<str>",
+        "license": "<str>",
+        "package": "next",
+        "recommendation": "update_required",
+        "requested_version": "14.2.0",
+        "vulnerabilities": {
+          "count": "<int>",
+          "critical": "<int>",
+          "high": "<int>"
+        }
+      },
+      "<list:nonempty>"
+    ],
+    "packages_scanned": "<int>",
+    "project_risk": "high",
+    "summary": "<dict>",
+    "transitive": null
+  },
+  "status": 200
+}

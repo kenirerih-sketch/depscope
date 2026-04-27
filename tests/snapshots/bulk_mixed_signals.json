@@ -1,0 +1,9 @@
+{
+  "shape": {
+    "_powered_by": "<str>",
+    "count": "<int>",
+    "results": "<list>",
+    "summary": "<dict>"
+  },
+  "status": 200
+}

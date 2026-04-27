@@ -1,0 +1,21 @@
+{
+  "shape": {
+    "detection_source": "runtime_cross_ecosystem",
+    "ecosystem": "npm",
+    "is_suspected_typosquat": true,
+    "note": "<str>",
+    "package": "reqeusts",
+    "targets": [
+      {
+        "distance": "<int>",
+        "downloads_legit": "<int>",
+        "downloads_suspect": "<int>",
+        "legitimate_package": "requests",
+        "popularity_ratio": "<float>",
+        "reason": "<str:86>"
+      },
+      "<list:nonempty>"
+    ]
+  },
+  "status": 200
+}

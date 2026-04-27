@@ -1,0 +1,21 @@
+{
+  "shape": {
+    "detection_source": "runtime_levenshtein",
+    "ecosystem": "npm",
+    "is_suspected_typosquat": true,
+    "note": "<str>",
+    "package": "lodsh",
+    "targets": [
+      {
+        "distance": "<int>",
+        "downloads_legit": "<int>",
+        "downloads_suspect": "<int>",
+        "legitimate_package": "lodash",
+        "popularity_ratio": "<float>",
+        "reason": "<str:50>"
+      },
+      "<list:nonempty>"
+    ]
+  },
+  "status": 200
+}
