@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalLayoutZh, Sec, Strong, A } from "../../../components/legal/LegalLayoutZh";
 
 export const metadata: Metadata = {
-  title: "数据处理附录 — DepScope",
+  title: "数据处理附录",
   description:
     "DepScope 数据处理附录（DPA）。管理代表您处理个人数据的 GDPR 第 28 条条款。",
   alternates: {

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalLayout, Sec, Strong, A } from "../../components/legal/LegalLayout";
 
 export const metadata: Metadata = {
-  title: "Data Processing Addendum — DepScope",
+  title: "Data Processing Addendum",
   description:
     "DepScope Data Processing Addendum (DPA). GDPR art. 28 terms governing personal data processed on your behalf.",
   alternates: {

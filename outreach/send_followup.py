@@ -17,7 +17,7 @@ EMAILS = [
         "subject": "Article: Free API that checks package health for AI agents (npm focus)",
         "body": f"""Hi Tyler,
 
-Quick share for Bytes.dev — I published an article about a free API I built for checking 17 ecosystems package health:
+Quick share for Bytes.dev — I published an article about a free API I built for checking 19 ecosystems package health:
 
 {DEVTO}
 
@@ -48,7 +48,7 @@ depscope@cuttalo.com"""
     },
     {
         "to": "yo@dev.to",
-        "subject": "New article on Dev.to: package health data for 14,700+ packages across 17 ecosystems",
+        "subject": "New article on Dev.to: package health data for 14,700+ packages across 19 ecosystems",
         "body": f"""Hi Dev.to team,
 
 Just published my first article on Dev.to:
@@ -64,7 +64,7 @@ Vincenzo"""
         "subject": "Cross-posting: Package health analysis article (14,700+ packages analyzed)",
         "body": f"""Hi Hashnode team,
 
-I published an article analyzing the health of 14,700+ packages across 17 ecosystems:
+I published an article analyzing the health of 14,700+ packages across 19 ecosystems:
 {DEVTO}
 
 Key finding: 35% score below 60/100, deprecated packages get 80M+ downloads/week.

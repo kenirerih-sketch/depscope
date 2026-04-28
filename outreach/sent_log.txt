@@ -11,7 +11,7 @@
 2026-04-16T05:27:49.197307 | tips@techcrunch.com | AI coding agents are suggesting deprecated packages — data shows the problem at scale
 2026-04-16T05:31:06.696813 | hello@console.dev | Dev tool submission: DepScope — free package health API for AI agents
 2026-04-16T05:32:47.327218 | partnerships@openai.com | Package health API for Codex/ChatGPT coding — free, no auth, already in GPT Store
-2026-04-16T05:37:11.082210 | editors@changelog.com | Package health data: 35% of popular packages need attention — report + open API
+2026-04-16T05:37:11.0817290 | editors@changelog.com | Package health data: 35% of popular packages need attention — report + open API
 2026-04-16T05:38:48.249929 | hi@cursor.com | Free MCP server for package health checks — built for Cursor agents
 2026-04-16T05:43:11.997711 | DarkReadingNews@darkreading.com | Data: deprecated npm packages with 80M+ weekly downloads persist in supply chains
 2026-04-16T05:44:49.045681 | support@codeium.com | Package health MCP server for Windsurf — free, 10 endpoints

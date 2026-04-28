@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalLayoutZh, Sec, Strong, A } from "../../../components/legal/LegalLayoutZh";
 
 export const metadata: Metadata = {
-  title: "公司信息 — DepScope",
+  title: "公司信息",
   description: "根据意大利 D.Lgs. 70/2003 第 7 条的 DepScope 法律披露。",
   alternates: {
     canonical: "https://depscope.dev/zh/imprint",

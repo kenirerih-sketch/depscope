@@ -12,7 +12,7 @@ DepScope is the shared layer:
 → OSV.dev + GitHub Advisory Database exposed as a live API
 → A dedicated endpoint returns a 74%-smaller payload than raw registry JSON for the same install decision
 → MCP server for direct Claude Desktop / Cursor integration
-→ Covers 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems + 10 more)
+→ Covers 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems + 10 more)
 
 Open infrastructure, MIT-licensed, EU-hosted.
 

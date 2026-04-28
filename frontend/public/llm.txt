@@ -34,7 +34,7 @@ AI agents independently query npm/PyPI/OSV millions of times for the same data. 
 Add to your agent's rules file:
 Before any install: curl depscope.dev/api/check/{eco}/{pkg} — no auth, free
 
-## 17 ecosystems
+## 19 ecosystems
 npm, pypi, cargo, go, composer, maven, nuget, rubygems, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew
 
 ## Five verticals (one infrastructure)

@@ -14,7 +14,7 @@ Millions of AI coding agents — ChatGPT, Claude, Cursor, Copilot, Windsurf — 
 
 What DepScope is.
 
-depscope.dev is the shared layer: OSV + GitHub Advisory Database as a live API, a dedicated endpoint returning 74% smaller payload than raw registry JSON for the same install decision, and an MCP server for direct Claude / Cursor / Windsurf / Claude Desktop integration. 17 ecosystems indexed including the long-tail that the big players ignore (Homebrew, CRAN, Hex, CocoaPods, Hackage, Conda). Open infrastructure, MIT client, EU-hosted.
+depscope.dev is the shared layer: OSV + GitHub Advisory Database as a live API, a dedicated endpoint returning 74% smaller payload than raw registry JSON for the same install decision, and an MCP server for direct Claude / Cursor / Windsurf / Claude Desktop integration. 19 ecosystems indexed including the long-tail that the big players ignore (Homebrew, CRAN, Hex, CocoaPods, Hackage, Conda). Open infrastructure, MIT client, EU-hosted.
 
 72h of real public-traffic data.
 

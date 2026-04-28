@@ -1,3 +1,18 @@
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Integrate DepScope — MCP, CLI, GitHub Action, raw API",
+  description: "5-minute setup snippets for Claude Code/Cursor/Cline (MCP), GitHub Actions, and direct curl. Zero auth, free, 19 ecosystems.",
+  alternates: { canonical: "https://depscope.dev/integrate" },
+  openGraph: {
+    title: "Integrate DepScope",
+    description: "MCP, CLI, GitHub Action, raw API — 5-minute setup.",
+    url: "https://depscope.dev/integrate",
+    siteName: "DepScope",
+    type: "website",
+  },
+};
+
 import { Card, CardBody, CardHeader, CardTitle, PageHeader, Section, Footer, Badge } from "../../components/ui";
 import { CopyButton } from "../../components/CopyButton";
 

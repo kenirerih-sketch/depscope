@@ -11,7 +11,7 @@
 
 Hi [Name],
 
-We analyzed the health of 14,700+ packages across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more) and found that **35% fall into "caution" or "critical" health categories**. The worst part: deprecated packages like `request` (deprecated since 2020) still get 16 million downloads every week, and `pkg-dir` hits 80 million — because they're buried in dependency trees nobody audits.
+We analyzed the health of 14,700+ packages across 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more) and found that **35% fall into "caution" or "critical" health categories**. The worst part: deprecated packages like `request` (deprecated since 2020) still get 16 million downloads every week, and `pkg-dir` hits 80 million — because they're buried in dependency trees nobody audits.
 
 We published the full findings here: **https://depscope.dev/report.md**
 

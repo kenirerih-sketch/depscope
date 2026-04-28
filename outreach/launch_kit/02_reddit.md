@@ -35,7 +35,7 @@ endpoint returning a compact natural-language string ("express@5.2.1 is
 safe · 11.2M weekly downloads · 0 CVEs · alternatives: fastify, hono")
 instead of the full JSON. Roughly 74% smaller payload for the same
 install decision. Also gives Claude live OSV + GitHub Advisory DB
-lookups across 17 ecosystems — so it stops suggesting packages from
+lookups across 19 ecosystems — so it stops suggesting packages from
 6-12 month stale training data.
 
 Install:
@@ -77,7 +77,7 @@ training data.
 Or local stdio: npm install -g depscope-mcp`
 - GitHub: https://github.com/cuttalo/depscope
 
-Covers 17 ecosystems total. Open infrastructure, MIT. The MCP server
+Covers 19 ecosystems total. Open infrastructure, MIT. The MCP server
 wires it into Claude Desktop, Cursor, Windsurf directly. Happy to answer
 questions.
 ```
@@ -113,7 +113,7 @@ MCP server for direct Claude/Cursor integration:
 - Docs: https://depscope.dev/api-docs
 - GitHub: https://github.com/cuttalo/depscope
 
-MIT, open infrastructure. 17 ecosystems. Feedback welcome.
+MIT, open infrastructure. 19 ecosystems. Feedback welcome.
 ```
 
 ---

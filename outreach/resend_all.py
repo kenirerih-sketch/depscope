@@ -38,7 +38,7 @@ def add(to, subject, body):
 
 # === TESTATE TECH ===
 add("editorial@devclass.com", "Data: 35% of popular packages score below 60/100 in new health analysis",
-    f"Hi DevClass team,\n\nWe analyzed 14,700+ packages across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more). 35% fall into caution or critical health categories.\n\nKey findings: pkg-dir (deprecated) gets 80M downloads/week, ms gets 412M/week with no updates, mlflow carries 18 CVEs.\n\nFull article: {DEVTO}\nReport data: {REPORT}\n\nVincenzo Rubino\nCuttalo srl - {SITE}")
+    f"Hi DevClass team,\n\nWe analyzed 14,700+ packages across 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more). 35% fall into caution or critical health categories.\n\nKey findings: pkg-dir (deprecated) gets 80M downloads/week, ms gets 412M/week with no updates, mlflow carries 18 CVEs.\n\nFull article: {DEVTO}\nReport data: {REPORT}\n\nVincenzo Rubino\nCuttalo srl - {SITE}")
 
 add("tips@bleepingcomputer.com", "mlflow has 18 unpatched vulnerabilities - package health data from 14,700+ packages",
     f"Hi,\n\nNew supply chain data: mlflow (most popular ML tracker) has 18 active CVEs. gradio has 11. annotated-types (core Pydantic dep) scores 36/100 despite 160M weekly downloads.\n\nFull analysis: {DEVTO}\n\nVincenzo Rubino\nDepScope ({SITE})")
@@ -65,7 +65,7 @@ add("pr@jfrog.com", "Package supply chain data: 80M weekly downloads to deprecat
 add("DarkReadingNews@darkreading.com", "Data: deprecated npm packages with 80M+ weekly downloads persist in supply chains",
     f"Hi Dark Reading,\n\npkg-dir (deprecated): 80M downloads/week. request (deprecated since 2020): 16M/week. AI agents compound the problem.\n\nFull data: {DEVTO}\n\nVincenzo Rubino\nDepScope ({SITE})")
 
-add("press@securityweek.com", "Research: AI/ML packages show worst vulnerability profile in 14,700+ package (17 ecosystems) analysis",
+add("press@securityweek.com", "Research: AI/ML packages show worst vulnerability profile in 14,700+ package (19 ecosystems) analysis",
     f"Hi SecurityWeek,\n\nmlflow 18 CVEs, gradio 11. PyPI avg health 61.5/100 (lowest). Cargo leads at 74.5.\n\nArticle: {DEVTO}\n\nVincenzo Rubino\nDepScope ({SITE})")
 
 # === AI COMPANIES ===
@@ -98,7 +98,7 @@ add("editor@cooperpress.com", "For JS/Node Weekly: npm package health analysis",
     f"Hi Peter,\n\nArticle for consideration: {DEVTO}\n\nnpm findings: ms 412M downloads/week with no updates, pkg-dir 80M/week deprecated.\nFree API: {SITE}/api/check/npm/express\n\nVincenzo Rubino")
 
 add("hello@console.dev", "Dev tool submission: DepScope - free package health API",
-    f"Hi Console,\n\nSubmitting DepScope: free API for package health (17 ecosystems). Article: {DEVTO}\nTry: curl {SITE}/api/check/npm/express\n\nVincenzo Rubino")
+    f"Hi Console,\n\nSubmitting DepScope: free API for package health (19 ecosystems). Article: {DEVTO}\nTry: curl {SITE}/api/check/npm/express\n\nVincenzo Rubino")
 
 add("editors@changelog.com", "Package health data: 35% of popular packages need attention",
     f"Hi Changelog,\n\nArticle: {DEVTO}\n35% of 14,700+ packages score below 60/100. AI/ML has worst security. Free API at {SITE}.\n\nVincenzo Rubino")
@@ -113,7 +113,7 @@ add("liran@lirantal.com", "Your awesome-nodejs-security list inspired this - 14,
 add("feross@socket.dev", "DepScope health data complements Socket's work - 14,700+ packages",
     f"Hi Feross,\n\nWhile Socket focuses on malware detection, DepScope provides quick health scores for AI agents. AI/ML corner of PyPI has worst security: mlflow 18 CVEs.\n\nArticle: {DEVTO}\nAPI: {SITE}\n\nVincenzo Rubino")
 
-add("seth@python.org", "PyPI security data: avg health 61.5/100 among 17 ecosystems (14,700+ packages analyzed)",
+add("seth@python.org", "PyPI security data: avg health 61.5/100 among 19 ecosystems (14,700+ packages analyzed)",
     f"Hi Seth,\n\nPyPI has the lowest health score (61.5/100) vs npm (70) and Cargo (74.5). mlflow 18 CVEs, gradio 11.\n\nArticle: {DEVTO}\n\nVincenzo Rubino\nCuttalo srl")
 
 add("william@trailofbits.com", "pip-audit data in context: PyPI health across 14,700+ packages",

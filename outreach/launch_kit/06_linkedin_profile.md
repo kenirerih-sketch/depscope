@@ -22,7 +22,7 @@ Founder @ Cuttalo srl · Building DepScope — Package Intelligence API for AI C
 
 **Alternative:**
 ```
-Solo founder shipping DepScope: a free, shared-cache package health API for AI coding agents. 17 ecosystems, MIT, hosted in Italy.
+Solo founder shipping DepScope: a free, shared-cache package health API for AI coding agents. 19 ecosystems, MIT, hosted in Italy.
 ```
 
 ## 4. Pronouns
@@ -51,7 +51,7 @@ Label: "DepScope"
 ```
 I build infrastructure that makes AI-assisted development safer.
 
-Specifically, I ship DepScope (depscope.dev) — a free, open-source API layer that gives AI coding agents (Claude, Cursor, ChatGPT, Copilot, Aider) live package-health and vulnerability data for 17 ecosystems: npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew.
+Specifically, I ship DepScope (depscope.dev) — a free, open-source API layer that gives AI coding agents (Claude, Cursor, ChatGPT, Copilot, Aider) live package-health and vulnerability data for 19 ecosystems: npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew.
 
 The problem DepScope solves:
 • AI agents recommend packages from training data 6-12 months stale
@@ -86,7 +86,7 @@ depscope.dev · github.com/cuttalo/depscope
 - **Industry:** Software Development
 - **Description:**
 ```
-Founder and solo builder at Cuttalo srl. Currently shipping DepScope (depscope.dev), a free API and MCP server that gives AI coding agents live package-health data across 17 ecosystems. MIT, EU-hosted, no paywall on core data.
+Founder and solo builder at Cuttalo srl. Currently shipping DepScope (depscope.dev), a free API and MCP server that gives AI coding agents live package-health data across 19 ecosystems. MIT, EU-hosted, no paywall on core data.
 
 Before DepScope, Cuttalo operated as the umbrella for digital-fabrication work (custom laser and 3D-ceramic projects, small-run manufacturing in Grottaglie). The tooling and rigor carried over.
 ```

@@ -67,7 +67,7 @@ export async function generateMetadata(
   const eco = (params.ecosystem || "").toLowerCase();
   const label = eco && ECO_LABELS[eco] ? ECO_LABELS[eco] : "packages";
   return {
-    title: `Trending ${label} — DepScope`,
+    title: `Trending ${label}`,
     description: `Packages AI agents are querying most right now. ${
       eco && eco !== "all" ? `Ecosystem: ${eco}.` : "Across 19 ecosystems."
     } Live rank, movement and weekly growth.`,

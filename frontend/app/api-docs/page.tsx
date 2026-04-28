@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import { Card, CardBody, CardHeader, CardTitle, PageHeader, Section, Footer, Badge } from "../../components/ui";
+
+export const metadata: Metadata = {
+  title: "API Documentation — 22 endpoints, zero auth",
+  description: "Full DepScope REST API reference: package check, MCP, breaking changes, vulnerabilities, compatibility. 19 ecosystems, free, no API key.",
+  alternates: { canonical: "https://depscope.dev/api-docs" },
+};
 import { CopyButton } from "../../components/CopyButton";
 
 interface Endpoint {
@@ -18,7 +25,7 @@ const CORE_ENDPOINTS: Endpoint[] = [
     desc: "Full package intelligence. THE most-used endpoint. Returns health + vulns + versions + license_risk + historical_compromise + recommendation.",
     example: "curl https://depscope.dev/api/check/npm/axios",
     params: [
-      { name: "ecosystem", type: "path", desc: "One of 17 supported (npm, pypi, cargo, go, maven, ...)" },
+      { name: "ecosystem", type: "path", desc: "One of 19 supported (npm, pypi, cargo, go, maven, ...)" },
       { name: "package", type: "path", desc: "Package name (scoped OK: @anthropic-ai/sdk)" },
       { name: "version", type: "query", desc: "Optional pinned version. Returns version_scoped block with CVE filter for THAT version." },
     ],

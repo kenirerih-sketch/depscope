@@ -10,7 +10,7 @@ coverImage: "https://depscope.dev/logo-192.png"
 
 Every `npm install` is an act of trust. But how healthy are the packages you depend on?
 
-We built [DepScope](https://depscope.dev) — a free, open API that checks package health across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more). No API key needed, 200 req/min, built specifically for AI coding agents (MCP-compatible).
+We built [DepScope](https://depscope.dev) — a free, open API that checks package health across 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more). No API key needed, 200 req/min, built specifically for AI coding agents (MCP-compatible).
 
 ## Key Findings from 14,700+ Packages
 

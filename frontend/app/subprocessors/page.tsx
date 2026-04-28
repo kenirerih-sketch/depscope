@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalLayout, Sec, Strong, A } from "../../components/legal/LegalLayout";
 
 export const metadata: Metadata = {
-  title: "Sub-processors — DepScope",
+  title: "Sub-processors",
   description:
     "List of third-party sub-processors used by DepScope and their role. Updated as the list changes.",
   alternates: {

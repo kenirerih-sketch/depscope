@@ -64,7 +64,8 @@ export const metadata: Metadata = {
     },
   },
   alternates: {
-    canonical: "https://depscope.dev/",
+    // canonical removed: each page declares its own. Root canonical pointing
+    // to "/" caused 50+ pages to be flagged as duplicate-of-home in GSC.
     languages: {
       en: "https://depscope.dev/",
       "zh-CN": "https://depscope.dev/zh",

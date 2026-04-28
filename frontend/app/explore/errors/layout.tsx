@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Package Error Fix Database | DepScope",
+  title: "Package Error Fix Database",
   description:
     "Search error messages from npm, pip, cargo, go. Get the fix in one click. Cannot find module, ModuleNotFoundError, error[E0433] and thousands more — solved.",
   keywords: [
@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     "pip error troubleshoot", "cargo error fix", "package error database",
   ],
   openGraph: {
-    title: "Error → Fix Database | DepScope",
+    title: "Error → Fix Database",
     description: "Search any package error, get the fix instantly. Across npm, pip, cargo, go.",
     url: "https://depscope.dev/explore/errors",
     siteName: "DepScope",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Error → Fix Database | DepScope",
+    title: "Error → Fix Database",
     description: "Search any package error, get the fix instantly.",
   },
   alternates: {

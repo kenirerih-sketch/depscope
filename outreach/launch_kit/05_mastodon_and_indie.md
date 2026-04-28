@@ -6,7 +6,7 @@
 ```
 Shipped depscope.dev — a shared cache + live OSV/GHSA API so AI coding agents (Claude, Cursor, ChatGPT) stop burning tokens on raw registry JSON for every npm/PyPI/Cargo install decision.
 
-/api/prompt endpoint returns a 74%-smaller payload for the same answer. 17 ecosystems. Open infrastructure, MIT.
+/api/prompt endpoint returns a 74%-smaller payload for the same answer. 19 ecosystems. Open infrastructure, MIT.
 
 `curl https://depscope.dev/api/prompt/npm/express`
 
@@ -26,7 +26,7 @@ only to get suggestions from 6-12 month stale training data, this might
 help.
 
 Built `depscope-mcp` — MCP server that gives AI coding agents live OSV
-+ GitHub Advisory DB lookups across 17 ecosystems (npm/PyPI/Cargo/...).
++ GitHub Advisory DB lookups across 19 ecosystems (npm/PyPI/Cargo/...).
 A /api/prompt endpoint returns a ~74% smaller payload than raw registry
 JSON for the same install decision.
 
@@ -64,7 +64,7 @@ CVEs, deprecated libs, hallucinated names.
 **What it is:**
 Shared cache + live OSV + GitHub Advisory DB as an API. A /api/prompt
 endpoint returns a ~74% smaller payload than raw registry JSON for the
-same install decision. MCP server on npm. 17 ecosystems.
+same install decision. MCP server on npm. 19 ecosystems.
 
 **Stack:** FastAPI + PostgreSQL 17 + Redis. MIT. EU-hosted.
 

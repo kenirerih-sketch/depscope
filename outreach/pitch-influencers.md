@@ -5,7 +5,7 @@
 ## Tweet Thread (post from @depscope or personal account)
 
 **Tweet 1:**
-We analyzed the health of 14,700+ packages across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more).
+We analyzed the health of 14,700+ packages across 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more).
 
 35% scored "caution" or "critical."
 
@@ -60,7 +60,7 @@ Hi Simon — we built DepScope (depscope.dev), a package health scoring tool, an
 
 ### @swyx (Shawn Wang)
 
-Hey Shawn — we analyzed 14,700+ packages across 17 ecosystems for health signals. 35% scored caution or critical. The AI angle might interest you: coding assistants suggest deprecated packages like `request` in 23% of completions, creating a feedback loop. Full report at depscope.dev/report.md. The tool is free at depscope.dev.
+Hey Shawn — we analyzed 14,700+ packages across 19 ecosystems for health signals. 35% scored caution or critical. The AI angle might interest you: coding assistants suggest deprecated packages like `request` in 23% of completions, creating a feedback loop. Full report at depscope.dev/report.md. The tool is free at depscope.dev.
 
 ### @levelsio (Pieter Levels)
 

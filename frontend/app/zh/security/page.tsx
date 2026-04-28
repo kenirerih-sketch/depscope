@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalLayoutZh, Sec, Strong, A } from "../../../components/legal/LegalLayoutZh";
 
 export const metadata: Metadata = {
-  title: "安全 — DepScope",
+  title: "安全",
   description: "DepScope 的安全概览：基础设施、加密、访问控制、事件响应。",
   alternates: {
     canonical: "https://depscope.dev/zh/security",

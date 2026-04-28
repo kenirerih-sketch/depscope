@@ -153,7 +153,7 @@ export default function StatsPage() {
               </div>
               <div className="flex items-center justify-between px-5 py-3.5">
                 <span className="text-sm text-[var(--text-dim)]">Data sources</span>
-                <span className="text-sm font-mono text-[var(--text)]">OSV + 17 registries</span>
+                <span className="text-sm font-mono text-[var(--text)]">OSV + 19 registries</span>
               </div>
             </div>
           </Card>

@@ -20,6 +20,7 @@ import { CopyButton } from "../../../../components/CopyButton";
 
 interface ComparePackage {
   package: string;
+  error?: string;
   latest_version: string;
   health_score: number;
   health_risk: string;
@@ -68,10 +69,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   const data = await fetchCompare(ecosystem, pkgs);
   const names = pkgs.join(" vs ");
-  const title = `${names} — Package Comparison | DepScope`;
+  const title = `${names} — Package Comparison`;
   let description = `Compare ${names} for ${ecosystem}.`;
   if (data) {
-    const scores = data.packages.map((p) => `${p.package}: ${p.health_score}/100`).join(", ");
+    const scores = data.packages.filter((p) => !p.error && p.health_score !== undefined).map((p) => `${p.package}: ${p.health_score}/100`).join(", ");
     description = `${names} comparison for ${ecosystem}. Health scores: ${scores}. Winner: ${data.winner}. Free data by DepScope.`;
   }
   return {
@@ -110,6 +111,9 @@ export default async function ComparePage({ params }: Props) {
 
   const data = await fetchCompare(ecosystem, pkgs);
   if (!data || !data.packages || data.packages.length === 0) notFound();
+  // Filter out packages that returned an error (e.g. not_found)
+  data.packages = data.packages.filter((p) => !p.error && p.health_score !== undefined);
+  if (data.packages.length < 2) notFound();
 
   const jsonLd = {
     "@context": "https://schema.org",

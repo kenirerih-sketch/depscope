@@ -1,6 +1,6 @@
 ---
 name: DepScope Platform
-description: depscope.dev — Package Intelligence for AI Agents. CT 140 on Proxmox 9 (OVH RISE-M). FastAPI + Next.js + PostgreSQL 17. 19 ecosystems, 31k+ packages indexed, 2.2k+ vulnerabilities, 595 curated alternatives, MCP with 29 tools. Free, no-auth public API. Stage mirror at stage.depscope.dev.
+description: depscope.dev — Package Intelligence for AI Agents. CT 140 on Proxmox 9 (OVH RISE-M). FastAPI + Next.js + PostgreSQL 17. 19 ecosystems, 749k+ packages indexed, 17,290 vulnerabilities, 724 curated alternatives, MCP with 22 tools. Free, no-auth public API.
 type: project
 ---
 
@@ -47,9 +47,6 @@ MSYS_NO_PATHCONV=1 node C:/Users/Vincenzo/fetch-new.js 140 <remote> <local>
 | Env | Dir | API | MCP | Web | DB | Admin key |
 |-----|-----|-----|-----|-----|----|-----------|
 | **prod** | `/home/deploy/depscope/` | :8000 | :8001 | :3000 | `depscope` | `ds_admin_<prod>` |
-| **stage** | `/home/deploy/depscope-stage/` | :8100 | :8101 | :3100 | `depscope_stage` | `ds_admin_stage_<hash>` |
-
-Stage is exposed at `https://stage.depscope.dev` behind **HTTP basic auth**. Prod is `https://depscope.dev`.
 
 ### 1.3 PM2
 
@@ -62,14 +59,12 @@ sudo -u deploy pm2 restart depscope-api-stage
 sudo -u deploy pm2 logs depscope-api-stage --lines 100
 ```
 
-Stage PM2 config: `/home/deploy/depscope-stage/ecosystem.stage.config.js`.
 Prod PM2 config:  `/home/deploy/depscope/ecosystem.config.js`.
 
 ### 1.4 Database
 
 ```bash
 # Stage
-PGPASSWORD=$STAGE_DB_PASS psql -U depscope_stage -h localhost -d depscope_stage
 
 # Prod
 PGPASSWORD=$PROD_DB_PASS psql -U depscope -h localhost -d depscope
@@ -97,7 +92,7 @@ Client → Cloudflare → HAProxy (host, :80) → CT 140 Nginx (:80)
 
 - **Host**: `91.134.4.25` — OVH RISE-M, Proxmox 9.1 (installed 2026-04-21).
 - **CT 140** IP: `10.10.0.140`. LXC container, Debian 13, Python 3.13, Node 20.
-- **HAProxy** on host splits `depscope.dev` and `stage.depscope.dev` to the same CT, different ports.
+- **HAProxy** on host routes `depscope.dev` to the CT.
 - **Stage is isolated**: separate DB, separate Redis DB index (`/1`), SMTP sinkholed to `127.0.0.1:9999` so nothing can email out.
 
 ---
@@ -179,14 +174,14 @@ Logs: `/var/log/depscope/*.log` (prod) — stage cron does not exist, scripts ru
 
 1. Pull latest stage code:
    ```bash
-   cd /home/deploy/depscope-stage && git pull
+
    ```
 2. Edit locally or directly in stage (`MSYS_NO_PATHCONV=1 node push-new.js 140 ...`).
 3. Restart the relevant stage process:
    ```bash
    sudo -u deploy pm2 restart depscope-api-stage
    ```
-4. Smoke-test against `http://127.0.0.1:8100/api/...` or `https://stage.depscope.dev/...` (basic auth).
+4. Smoke-test against (stage decommissioned).
 5. Run `scripts/selftest.py` against stage.
 6. Promote: copy files to `/home/deploy/depscope/` (or `scripts/sync_prod_to_stage.sh` is the **reverse** direction, do not confuse). Then `pm2 restart depscope-api && pm2 restart depscope-web`.
 7. Full backup before any risky write: `scripts/full_backup.sh`.
@@ -200,7 +195,7 @@ Logs: `/var/log/depscope/*.log` (prod) — stage cron does not exist, scripts ru
 | Path | LOC | Purpose |
 |------|----:|---------|
 | `api/main.py` | 6046 | FastAPI app, every endpoint, rate-limit, tracking |
-| `api/registries.py` | 1867 | Per-ecosystem fetchers (17 registries) |
+| `api/registries.py` | 1867 | Per-ecosystem fetchers (19 registries) |
 | `api/health.py` | 209 | Health score math |
 | `api/verticals.py` | 718 | Error → fix DB, compat matrix, known bugs |
 | `api/verticals_v2.py` | 576 | Newer vertical endpoints |
@@ -245,7 +240,7 @@ Logs: `/var/log/depscope/*.log` (prod) — stage cron does not exist, scripts ru
 
 Marketing agent sub-tree: `/api/admin/agent/{rules,plan,actions,opportunities,opportunities/all,metrics,run,dashboard,platforms,timeline,emails,opportunities/{id}/article,config,config/{key},state}`.
 
-### 7.3 MCP (29 tools via stdio or remote HTTP)
+### 7.3 MCP (22 tools via stdio or remote HTTP)
 
 Listed in `mcp-server/tools.js`: `ai_brief`, `audit_stack`, `get_migration_path`, `check_package`, `get_health_score`, `get_vulnerabilities`, `get_latest_version`, `package_exists`, `get_package_prompt`, `compare_packages`, `scan_project`, `find_alternatives`, `get_breaking_changes`, `get_known_bugs`, `check_compatibility`, `resolve_error`, `search_errors`, `check_malicious`, `check_typosquat`, `get_scorecard`, `get_maintainer_trust`, `get_quality`, `get_provenance`, `get_trending`, `report_anomaly`, `contact_depscope`, `check_bulk`, `install_command`, `pin_safe`.
 
@@ -290,7 +285,7 @@ redis-cli -n 0 FLUSHDB
 ### 8.5 Sync prod → stage
 
 ```bash
-bash /home/deploy/depscope-stage/scripts/sync_prod_to_stage.sh
+
 ```
 
 Refreshes stage DB and code. **Never run the reverse direction without an explicit commit.**

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Card, CardBody, PageHeader, Footer } from "../../components/ui";
 
 export const metadata: Metadata = {
-  title: "Explore — Trending, Errors, Compat, Bugs, Breaking | DepScope",
+  title: "Explore — Trending, Errors, Compat, Bugs, Breaking",
   description:
     "Five dimensions of package intelligence for AI agents: trending packages, error → fix database, stack compatibility, known bugs per version, and major-version breaking changes with migration hints.",
   alternates: { canonical: "https://depscope.dev/explore" },

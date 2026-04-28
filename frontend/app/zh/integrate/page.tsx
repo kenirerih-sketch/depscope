@@ -1,7 +1,7 @@
 
 import type { Metadata } from "next";
 export const metadata: Metadata = {
-  title: "集成指南 | DepScope",
+  title: "集成指南",
   alternates: { canonical: "https://depscope.dev/zh/integrate" },
 };
 

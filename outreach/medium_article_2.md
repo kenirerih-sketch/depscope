@@ -1,6 +1,6 @@
 # The npm Packages You Use Every Day Are Sicker Than You Think
 
-I analyzed 14,700+ packages across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more). 35% scored below 60/100 on our health index.
+I analyzed 14,700+ packages across 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more). 35% scored below 60/100 on our health index.
 
 Here's what nobody is telling you about the packages in your node_modules.
 

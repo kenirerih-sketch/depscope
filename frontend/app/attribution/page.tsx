@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalLayout, Sec, Strong, A } from "../../components/legal/LegalLayout";
 
 export const metadata: Metadata = {
-  title: "Data Attribution & Licenses — DepScope",
+  title: "Data Attribution & Licenses",
   description:
     "Attribution for the public data sources used by DepScope: OSV.dev, GitHub Advisory Database, package registries.",
   alternates: {

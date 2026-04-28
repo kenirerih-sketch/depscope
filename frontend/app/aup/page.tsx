@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalLayout, Sec, Strong, A } from "../../components/legal/LegalLayout";
 
 export const metadata: Metadata = {
-  title: "Acceptable Use Policy — DepScope",
+  title: "Acceptable Use Policy",
   description:
     "What is and is not allowed when using the DepScope API, dashboard, and MCP server.",
   alternates: {

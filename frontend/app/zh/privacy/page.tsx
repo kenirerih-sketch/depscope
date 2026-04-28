@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalLayoutZh, Sec, Strong, A } from "../../../components/legal/LegalLayoutZh";
 
 export const metadata: Metadata = {
-  title: "隐私政策 — DepScope",
+  title: "隐私政策",
   description:
     "DepScope（Cuttalo srl）如何收集、使用和保护个人数据。符合GDPR，包含第6条法律依据、欧盟外传输和数据保留期。",
   alternates: {

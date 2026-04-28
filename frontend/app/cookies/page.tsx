@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalLayout, Sec, Strong, A } from "../../components/legal/LegalLayout";
 
 export const metadata: Metadata = {
-  title: "Cookie Policy — DepScope",
+  title: "Cookie Policy",
   description:
     "Which cookies DepScope uses, why, and how to change your preferences. Compliant with Italian Garante provvedimento of 10 June 2021.",
   alternates: {

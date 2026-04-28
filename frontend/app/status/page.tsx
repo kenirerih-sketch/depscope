@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Footer } from "../../components/ui";
 
 export const metadata: Metadata = {
-  title: "Status — DepScope",
+  title: "Status",
   description:
     "DepScope operational status. Uptime, component health, packages indexed, API call volume. Real-time, zero-auth.",
   alternates: { canonical: "https://depscope.dev/status" },

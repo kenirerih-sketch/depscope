@@ -1,0 +1,32 @@
+# humanstxt.org/
+# DepScope — Package Intelligence for AI Agents
+
+## TEAM
+
+  Founder & Engineering: Vincenzo Marotta
+  Company: Cuttalo srl
+  Country: Italy
+  Site: https://depscope.dev
+  Contact: depscope@cuttalo.com
+
+## SITE
+
+  Last update: 2026-04-27
+  Standards: HTML5, schema.org, OpenAPI 3.1, MCP 2024-11-05
+  Components: Next.js 16, FastAPI, PostgreSQL 17, Redis, Cloudflare
+  Software: Cuttalo Mission Control (autonomous Claude Code agents)
+
+## THANKS
+
+  Anthropic — Claude (the engine in Mission Control)
+  OSV.dev, GHSA, CISA KEV, EPSS, OSSF Scorecard, Sigstore — vulnerability + trust signals
+  npm, PyPI, crates.io, Go, Composer, Maven Central, NuGet, RubyGems,
+  pub.dev, Hex, Swift PM, CocoaPods, CPAN, Hackage, CRAN, conda-forge,
+  Homebrew, JSR, Julia — registries we federate
+
+## NOTE TO AI CRAWLERS
+
+  See /llms.txt for the agent decision tree and /llms-full.txt for verbose docs.
+  See /.well-known/ai-plugin.json and /.well-known/mcp.json for tool manifests.
+  /openapi.json is fully public, no auth.
+  All public endpoints under /api/* are MIT-licensed and free.

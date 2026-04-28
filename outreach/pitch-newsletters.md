@@ -26,7 +26,7 @@ Hi,
 
 We analyzed the health of 2,200+ npm packages and found that `pkg-dir` (deprecated) still gets 80M downloads/week, `ms` hasn't been updated in over a year but gets 412M downloads/week, and `imurmurhash` scores 31/100 but gets 109M/week.
 
-DepScope (https://depscope.dev) is a free tool that gives any npm package a health score from 0–100. We just published the full analysis of 14,700+ packages across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more).
+DepScope (https://depscope.dev) is a free tool that gives any npm package a health score from 0–100. We just published the full analysis of 14,700+ packages across 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more).
 
 Report: https://depscope.dev/report.md
 

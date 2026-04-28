@@ -20,7 +20,7 @@ EMAILS = [
 
 Your awesome-nodejs-security list and your work on npm supply chain security at Snyk have been a big reference for me.
 
-I built DepScope — a free API that scores package health across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more). We analyzed 14,700+ packages and found some data that confirms what you've been saying for years:
+I built DepScope — a free API that scores package health across 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more). We analyzed 14,700+ packages and found some data that confirms what you've been saying for years:
 
 - request (deprecated since 2020): still 16M downloads/week
 - pkg-dir (deprecated): 80M downloads/week, health 37/100
@@ -59,10 +59,10 @@ Cuttalo srl — {SITE}"""
     },
     {
         "to": "seth@python.org",
-        "subject": "PyPI security data: avg health 61.5/100 among 17 ecosystems (14,700+ packages analyzed)",
+        "subject": "PyPI security data: avg health 61.5/100 among 19 ecosystems (14,700+ packages analyzed)",
         "body": f"""Hi Seth,
 
-Given your role as PSF Security Developer-in-Residence, I thought you'd want to see this: we analyzed 14,700+ packages across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more). PyPI has the lowest average health score at 61.5/100, compared to npm (70) and Cargo (74.5).
+Given your role as PSF Security Developer-in-Residence, I thought you'd want to see this: we analyzed 14,700+ packages across 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more). PyPI has the lowest average health score at 61.5/100, compared to npm (70) and Cargo (74.5).
 
 The AI/ML packages are the worst offenders:
 - mlflow: 18 known CVEs
@@ -83,7 +83,7 @@ Cuttalo srl"""
         "subject": "Cargo leads in package health (74.5/100) — data from 14,700+ packages",
         "body": f"""Hi Filippo,
 
-Given your work on Go security and the Go Vulnerability Database, I thought you'd find this interesting: we analyzed 14,700+ packages across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more).
+Given your work on Go security and the Go Vulnerability Database, I thought you'd find this interesting: we analyzed 14,700+ packages across 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more).
 
 Cargo leads at 74.5/100 average health score, npm at 70, PyPI at 61.5. The Go ecosystem isn't in our dataset yet but it's next on the list.
 
@@ -99,7 +99,7 @@ Cuttalo srl"""
         "subject": "pip-audit data in context: PyPI health scores across 14,700+ packages",
         "body": f"""Hi William,
 
-As the creator of pip-audit, you probably see this daily — but we now have data at scale: PyPI averages 61.5/100 in our health scoring, the lowest of 17 ecosystems.
+As the creator of pip-audit, you probably see this daily — but we now have data at scale: PyPI averages 61.5/100 in our health scoring, the lowest of 19 ecosystems.
 
 We built DepScope ({SITE}), a free API that scores packages using OSV data (same source as pip-audit) plus maintenance, popularity, and community signals.
 

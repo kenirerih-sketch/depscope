@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "The State of Package Health 2026 | DepScope",
+  title: "The State of Package Health 2026",
   description:
     "Analysis of 14,700+ packages across 19 ecosystems reveals 54% fall into caution or critical health categories. Deprecated packages still get 146M+ downloads/week. AI agents suggest deprecated packages 23% of the time.",
   openGraph: {
-    title: "The State of Package Health 2026 | DepScope",
+    title: "The State of Package Health 2026",
     description:
       "What 14,700+ packages tell us about the software supply chain. 54% of packages present measurable risk. Deprecated packages get 146M+ downloads/week.",
     url: "https://depscope.dev/report",
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary",
-    title: "The State of Package Health 2026 | DepScope",
+    title: "The State of Package Health 2026",
     description:
       "54% of widely-used packages fall into caution or critical health categories. Full analysis of 14,700+ packages.",
   },

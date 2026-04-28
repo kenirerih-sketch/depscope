@@ -21,6 +21,16 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from api.config import VERSION, IP_HASH_SALT
+# Self-loopback hashes — server-internal calls that go through Cloudflare and
+# loop back to the API (cache warmer, agent loop test, MCP server). Excluded
+# from public metrics so they don't pollute "real traffic" numbers.
+SELF_IP_HASHES = {
+    "acc55350c8c3b6b38bc584c585aee8261f114424277cbfde059175dc627d5043",  # 51.255.70.8 outbound (LXC 140 via OVH RBX8)
+    "410e2677d4eea1799264675442ac2c2c90141115b520854991894cc48b76e690",  # Vincenzo's residential IT (admin dashboard polling — keep filtered)
+    "73cf4ced30f2bd12ec74d7d46d4d8fd66bd5c4fdfba8f2ec827462c1243e6de2",  # Vincenzo's residential IT (DHCP rotation 2026-04-27)
+    "e64c9444b7e189b4ee03f126a7fa5ac456c2ff4c22de829fbda945cb70416cd1",  # Vincenzo's secondary IT (mobile/different network)
+}
+
 
 # Process start time for /api/status uptime calculation.  # PATCH_STATUS_V1
 _PROCESS_START_TIME = __import__("time").time()
@@ -109,7 +119,7 @@ def _parse_agent_client(user_agent: str) -> str:
     return "other"
 
 # IPs to exclude from analytics (our own servers, cron, preprocess)
-EXCLUDED_IPS = {"127.0.0.1", "::1", "10.10.0.140", "10.10.0.1", "91.134.4.25"}
+EXCLUDED_IPS = {"127.0.0.1", "::1", "10.10.0.140", "10.10.0.1", "91.134.4.25", "51.255.70.8"}
 # Any IP starting with these is treated as internal/team traffic (never tracked).
 # /24 prefixes keep dynamic IPs covered.
 EXCLUDED_IP_PREFIXES = ("10.10.", "127.", "37.182.176.", "37.182.177.", "91.134.4.")
@@ -117,6 +127,8 @@ EXCLUDED_IP_PREFIXES = ("10.10.", "127.", "37.182.176.", "37.182.177.", "91.134.
 def _is_excluded_ip(ip: str) -> bool:
     if not ip:
         return False
+    if ip in EXCLUDED_IPS:
+        return True
     return any(ip.startswith(p) for p in EXCLUDED_IP_PREFIXES)
 
 from api.database import get_pool, close_pool
@@ -185,9 +197,9 @@ app = FastAPI(
     summary="Free, open API that tells AI agents if a package is safe, maintained, and up-to-date before they suggest installing it.",
     description=(
         "# DepScope\n\n"
-        "Package Intelligence for AI coding agents. **31,000+ packages** across **17 "
+        "Package Intelligence for AI coding agents. **749,000+ packages** across **17 "
         "ecosystems** (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, "
-        "Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew), **2,200+ CVEs** "
+        "Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew), **17,290 CVEs** "
         "enriched with CISA KEV + EPSS. Three verticals on one shared infrastructure:\n\n"
         "1. **Package health** — /api/check for full report, /api/prompt for LLM-"
         "optimized text (~74% smaller), /api/alternatives for replacements, /api/scan "
@@ -210,8 +222,7 @@ app = FastAPI(
     lifespan=lifespan,
     servers=[
         {"url": "https://depscope.dev", "description": "Production"},
-        {"url": "https://stage.depscope.dev", "description": "Staging"},
-    ],
+        ],
     contact={
         "name": "DepScope support",
         "email": "depscope@cuttalo.com",
@@ -971,6 +982,39 @@ async def benchmark_verify(ecosystem: str, package: str):
 # GET /api/status — zero-auth, public. Returns a shallow health probe
 # for uptime monitors + the /status human page + acquirer due-diligence.
 
+
+
+# ─── Measured benchmark results (persisted JSON from paper-grade run) ───
+# GET /api/benchmark/results — served verbatim from disk. Populated by
+# scripts/benchmark_v3.py (or its CLI-based variant). Used by the public
+# /benchmark page to render the measured Results section.
+
+_BENCH_RESULTS_PATH = "/home/deploy/depscope/data/bench-paper-results.json"
+
+
+@app.get("/api/benchmark/results", tags=["discover"])
+async def benchmark_results():
+    """Latest paper-grade benchmark results.
+
+    Returns a JSON document with hallucination hit-rate by model x condition,
+    plus per-entry verdicts. See /benchmark for the human-readable page.
+    """
+    import json as _json
+    import os as _os
+    try:
+        st = _os.stat(_BENCH_RESULTS_PATH)
+        with open(_BENCH_RESULTS_PATH) as f:
+            data = _json.load(f)
+        data.setdefault("_file_mtime", st.st_mtime)
+        return data
+    except FileNotFoundError:
+        raise HTTPException(
+            404,
+            "No benchmark results yet. Run a DepScope benchmark and write the JSON to "
+            "data/bench-paper-results.json.",
+        )
+
+
 @app.get("/api/status", tags=["discovery"])
 async def public_status():
     """Public status probe. Returns {ok, uptime_s, components, stats, version}.
@@ -1015,7 +1059,7 @@ async def public_status():
     try:
         async with (await get_pool()).acquire() as conn:
             api_calls_last_hour = await conn.fetchval(
-                "SELECT COUNT(*) FROM api_usage WHERE created_at > NOW() - INTERVAL '1 hour'"
+                "SELECT COUNT(*) FROM api_usage_public WHERE created_at > NOW() - INTERVAL '1 hour'"
             )
     except Exception:
         pass
@@ -1093,8 +1137,14 @@ async def admin_pw_ok(request: Request):
 async def rate_limit_middleware(request: Request, call_next):
     if request.url.path.startswith("/api/") and not request.url.path.startswith("/api/auth/"):
         from api.auth import _get_user_from_request, TIER_LIMITS, ANON_LIMIT
-        user = await _get_user_from_request(request)
         ip = request.headers.get("CF-Connecting-IP", request.client.host if request.client else "0.0.0.0")
+        # Whitelist: localhost + internal LAN are NEVER rate-limited (own cron/services)
+        if ip in ("127.0.0.1", "::1") or ip.startswith("10.10.0.") or ip.startswith("10.0.0."):
+            return await call_next(request)
+        # Admin-cookie holders also bypass rate limit (dashboard polls 9 endpoints / 30s)
+        if _has_admin_pw(request):
+            return await call_next(request)
+        user = await _get_user_from_request(request)
         if user and user.get("role") == "admin":
             identifier, limit = f"admin:{ip}", 0
         elif user and user.get("auth_source") == "api_key":
@@ -2104,9 +2154,11 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
         raise HTTPException(400, f"Unsupported ecosystem: {ecosystem}. Supported: npm, pypi, cargo, go, composer, maven, nuget, rubygems, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew, jsr, julia")
 
     # Bug #6: input validation on package name.
-    pkg_clean = (package or "").strip()
+    # FIX: strip trailing slash (GPT often sends /api/check/homebrew/foo/ - 74/day)
+    pkg_clean = (package or "").strip().rstrip("/")
     if not pkg_clean:
         raise HTTPException(400, "Package name cannot be empty")
+    package = pkg_clean  # use cleaned version everywhere downstream
     if ".." in pkg_clean or pkg_clean.startswith((".", "/", "-")) or "\\" in pkg_clean:
         raise HTTPException(400, f"Invalid package name: {package!r}")
     if len(pkg_clean) > 214:
@@ -4414,12 +4466,12 @@ async def get_stats():
     async with pool.acquire() as conn:
         pkg_count = await conn.fetchval("SELECT COUNT(*) FROM packages")
         vuln_count = await conn.fetchval("SELECT COUNT(*) FROM vulnerabilities")
-        usage_today = await conn.fetchval("SELECT COUNT(*) FROM api_usage WHERE created_at > NOW() - INTERVAL '1 day' AND user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent NOT ILIKE '%spider%' AND user_agent NOT ILIKE '%GoogleOther%' AND user_agent != ''")
-        usage_total = await conn.fetchval("SELECT COUNT(*) FROM api_usage WHERE user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent NOT ILIKE '%spider%' AND user_agent NOT ILIKE '%GoogleOther%' AND user_agent != ''")
+        usage_today = await conn.fetchval("SELECT COUNT(*) FROM api_usage_public WHERE created_at > NOW() - INTERVAL '1 day' AND user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent NOT ILIKE '%spider%' AND user_agent NOT ILIKE '%GoogleOther%' AND user_agent != ''")
+        usage_total = await conn.fetchval("SELECT COUNT(*) FROM api_usage_public WHERE user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent NOT ILIKE '%spider%' AND user_agent NOT ILIKE '%GoogleOther%' AND user_agent != ''")
         users_count = await conn.fetchval("SELECT COUNT(*) FROM users")
         top = await conn.fetch("""
             SELECT ecosystem, package_name, COUNT(*) as searches
-            FROM api_usage WHERE created_at > NOW() - INTERVAL '7 days'
+            FROM api_usage_public WHERE created_at > NOW() - INTERVAL '7 days'
             AND user_agent NOT LIKE '%Node%' AND user_agent NOT LIKE '%bot%' AND user_agent NOT LIKE '%crawl%'
               AND package_name IS NOT NULL AND package_name <> ''
               AND ecosystem IS NOT NULL AND ecosystem <> ''
@@ -4428,13 +4480,13 @@ async def get_stats():
         eco_rows = await conn.fetch("SELECT ecosystem, COUNT(*) as cnt FROM packages GROUP BY ecosystem ORDER BY cnt DESC")
         # Intelligence block (last 7 days, public aggregate)
         hallucinations_week = await conn.fetchval(
-            "SELECT COUNT(*) FROM api_usage WHERE is_hallucination = TRUE "
+            "SELECT COUNT(*) FROM api_usage_public WHERE is_hallucination = TRUE "
             "AND created_at > NOW() - INTERVAL '7 days'"
         )
         top_hallucinated = await conn.fetch(
             """SELECT ecosystem, package_name, COUNT(*) AS hits,
                       COUNT(DISTINCT ip_hash) AS callers
-               FROM api_usage
+               FROM api_usage_public
                WHERE is_hallucination = TRUE
                  AND created_at > NOW() - INTERVAL '7 days'
                  AND package_name IS NOT NULL AND package_name <> ''
@@ -4443,7 +4495,7 @@ async def get_stats():
         agents_rows = await conn.fetch(
             """SELECT agent_client, COUNT(*) AS calls,
                       COUNT(*) FILTER(WHERE is_hallucination) AS hallucinations
-               FROM api_usage
+               FROM api_usage_public
                WHERE created_at > NOW() - INTERVAL '7 days'
                  AND agent_client IS NOT NULL
                  AND agent_client NOT IN ('crawler','unknown')
@@ -4491,17 +4543,17 @@ async def admin_dashboard(request: Request):
         users = await conn.fetch("SELECT id, email, role, plan, api_key, created_at FROM users ORDER BY created_at DESC")
         usage_by_day = await conn.fetch("""
             SELECT DATE(created_at) as day, COUNT(*) as calls
-            FROM api_usage WHERE created_at > NOW() - INTERVAL '30 days'
+            FROM api_usage_public WHERE created_at > NOW() - INTERVAL '30 days'
             GROUP BY DATE(created_at) ORDER BY day
         """)
         usage_by_eco = await conn.fetch("""
-            SELECT ecosystem, COUNT(*) as calls FROM api_usage
+            SELECT ecosystem, COUNT(*) as calls FROM api_usage_public
             WHERE created_at > NOW() - INTERVAL '30 days'
             GROUP BY ecosystem ORDER BY calls DESC
         """)
         top_packages = await conn.fetch("""
             SELECT ecosystem, package_name, COUNT(*) as searches
-            FROM api_usage WHERE created_at > NOW() - INTERVAL '7 days'
+            FROM api_usage_public WHERE created_at > NOW() - INTERVAL '7 days'
             AND user_agent NOT LIKE '%Node%' AND user_agent NOT LIKE '%bot%' AND user_agent NOT LIKE '%crawl%'
             GROUP BY ecosystem, package_name ORDER BY searches DESC LIMIT 30
         """)
@@ -4519,7 +4571,7 @@ async def admin_dashboard(request: Request):
                     ELSE 'Other'
                 END as agent,
                 COUNT(*) as calls
-            FROM api_usage WHERE created_at > NOW() - INTERVAL '7 days'
+            FROM api_usage_public WHERE created_at > NOW() - INTERVAL '7 days'
             GROUP BY agent ORDER BY calls DESC
         """)
     return {
@@ -4539,13 +4591,13 @@ async def mcp_manifest():
     return {
         "name": "depscope",
         "display_name": "DepScope",
-        "version": "0.6.0",
+        "version": "0.7.1",
         "protocol_version": "2024-11-05",
         "description": (
             "Package Intelligence for AI agents. Check health, vulnerabilities, "
             "typosquats, malicious flags, alternatives, known bugs, breaking "
-            "changes, compat, error-to-fix across 19 ecosystems. 31k+ packages, "
-            "2.2k+ CVEs enriched with CISA KEV + EPSS. Zero auth, MIT."
+            "changes, compat, error-to-fix across 19 ecosystems. 742,000+ packages, "
+            "17,290+ CVEs enriched with CISA KEV + EPSS. Zero auth, MIT."
         ),
         "vendor": {"name": "Cuttalo srl", "url": "https://depscope.dev",
                    "contact": "depscope@cuttalo.com"},
@@ -4592,8 +4644,8 @@ async def ai_plugin():
         "schema_version": "v1",
         "name_for_human": "DepScope",
         "name_for_model": "depscope",
-        "description_for_human": "Check package health, vulnerabilities, error fixes and stack compatibility before installing. 19 ecosystems, MCP server (zero-install remote), 100% free.",
-        "description_for_model": "Use DepScope to check if a software package is safe, maintained, and up-to-date before suggesting it to install. Supports 19 ecosystems: npm, pypi, cargo, go, composer, maven, nuget, rubygems, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew. 31,000+ packages indexed, 2,200+ CVEs enriched with CISA KEV + EPSS, 22 MCP tools. Three verticals on one API: (1) package health via GET /api/check/{ecosystem}/{package} for full health report with vulns+score+recommendation, GET /api/prompt/{ecosystem}/{package} for LLM-optimized plain text (saves ~74% tokens), GET /api/compare/{ecosystem}/pkg1,pkg2 to compare, GET /api/alternatives/{ecosystem}/{package} for replacements, POST /api/scan to audit dependency lists. (2) error -> fix resolution via POST /api/error/resolve with a stack trace, GET /api/error?code=X for lookups. (3) stack compatibility via GET /api/compat?packages=next@16,react@19 to verify a combo before upgrading. Also GET /api/bugs/{ecosystem}/{package} for non-CVE known bugs per version. No authentication required for public endpoints. Optional API keys for higher limits. Completely free.",
+        "description_for_human": "Check package health, vulnerabilities, error fixes and stack compatibility before installing. 19 ecosystems, 742,000+ packages, MCP server (zero-install remote), 100% free.",
+        "description_for_model": "Use DepScope to check if a software package is safe, maintained, and up-to-date before suggesting it to install. Supports 19 ecosystems: npm, pypi, cargo, go, composer, maven, nuget, rubygems, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew, jsr, julia. 742,000+ packages indexed, 17,290 CVEs enriched with CISA KEV + EPSS, 22 MCP tools. Three verticals on one API: (1) package health via GET /api/check/{ecosystem}/{package} for full health report with vulns+score+recommendation, GET /api/prompt/{ecosystem}/{package} for LLM-optimized plain text (saves ~74% tokens), GET /api/compare/{ecosystem}/pkg1,pkg2 to compare, GET /api/alternatives/{ecosystem}/{package} for replacements, POST /api/scan to audit dependency lists. (2) error -> fix resolution via POST /api/error/resolve with a stack trace, GET /api/error?code=X for lookups. (3) stack compatibility via GET /api/compat?packages=next@16,react@19 to verify a combo before upgrading. Also GET /api/bugs/{ecosystem}/{package} for non-CVE known bugs per version. No authentication required for public endpoints. Optional API keys for higher limits. Completely free.",
         "auth": {"type": "none"},
         "api": {"type": "openapi", "url": "https://depscope.dev/openapi.json"},
         "logo_url": "https://depscope.dev/logo.png",
@@ -4694,29 +4746,60 @@ def _build_recommendation(pkg_data: dict, health: dict, vulns: list, requested_v
     }
 
 def _detect_source(request: Request) -> str:
-    """Detect if request comes from RapidAPI, GPT Store, MCP, or direct."""
+    """Detect if request comes from RapidAPI, AI bot, MCP, IDE, or direct."""
     if not request:
         return "internal"
     if request.headers.get("X-RapidAPI-Proxy-Secret") or request.headers.get("X-RapidAPI-User"):
         return "rapidapi"
     ua = request.headers.get("User-Agent", "").lower()
-    if "gptbot" in ua or "chatgpt-user" in ua:
+    # Frontier AI bots first
+    if "gptbot" in ua or "chatgpt-user" in ua or "oai-searchbot" in ua:
         return "gpt_bot"
+    if "claudebot" in ua or "anthropicbot" in ua or "claude-web/1.0" in ua:
+        return "claude_bot"
+    if "applebot" in ua:
+        return "apple_bot"
+    if "amazonbot" in ua:
+        return "amazon_bot"
+    if "googlebot" in ua or "googleother" in ua or "mediapartners-google" in ua or "adsbot-google" in ua:
+        return "google_bot"
+    if "bingbot" in ua or "bingpreview" in ua:
+        return "bing_bot"
+    if "yandexbot" in ua or "yandeximages" in ua or "yandexrender" in ua:
+        return "yandex_bot"
+    if "duckduckbot" in ua:
+        return "duckduck_bot"
+    if "baiduspider" in ua:
+        return "baidu_bot"
+    if "perplexitybot" in ua:
+        return "perplexity_bot"
+    if "facebookexternalhit" in ua or "meta-externalagent" in ua:
+        return "meta_bot"
+    if "twitterbot" in ua or "x-clientbot" in ua:
+        return "twitter_bot"
+    if "linkedinbot" in ua:
+        return "linkedin_bot"
+    if "ahrefsbot" in ua or "semrushbot" in ua or "mj12bot" in ua or "dotbot" in ua:
+        return "seo_bot"
+    # Real-client IDE / SDK
     if "chatgpt" in ua or "openai" in ua:
         return "gpt"
-    if "claudebot" in ua:
-        return "claude_bot"
     if "claude" in ua or "anthropic" in ua:
         return "claude"
     if "cursor" in ua:
         return "cursor"
+    if "windsurf" in ua:
+        return "windsurf"
     if "mcp" in ua or "depscope-mcp" in ua:
         return "mcp"
-    if "python" in ua or "httpx" in ua or "aiohttp" in ua:
+    if "python" in ua or "httpx" in ua or "aiohttp" in ua or "requests/" in ua:
         return "sdk"
-    if "node" in ua or "axios" in ua or "fetch" in ua:
+    if "node" in ua or "axios" in ua or "fetch" in ua or "got/" in ua:
         return "sdk"
-    if not ua or ua == "": 
+    # Generic crawler fallback before browser
+    if "bot" in ua or "crawl" in ua or "spider" in ua or "slurp" in ua:
+        return "seo_bot"
+    if not ua or ua == "":
         return "unknown"
     return "browser"
 
@@ -4829,6 +4912,27 @@ def _log_usage(ecosystem: str, package: str, request: Request = None,
                     mcp_tool_val = source[4:] if source.startswith("mcp:") else None
                     # GDPR: compute hash + sanitize — NEVER store raw IP on disk
                     ip_hash_val = _hash_ip(ip) if ip else None
+                    # Drop team/self traffic that wasn't caught by raw-IP filter
+                    # (e.g. admin team polling from residential IP).
+                    if ip_hash_val and ip_hash_val in SELF_IP_HASHES:
+                        return
+                    # Reclassify probe scanners (404 + browser/sdk UA + scanner-y path)
+                    # as scanner_bot so they don't pollute the "humans" pane.
+                    if status_code == 404 and source in ("browser", "sdk"):
+                        try:
+                            _path_lower = (request.url.path or "").lower() if request else ""
+                        except Exception:
+                            _path_lower = ""
+                        _SCANNER_MARKERS = (
+                            ".env", ".git", ".svn", ".aws", ".bash_history",
+                            "wp-admin", "wp-login", "xmlrpc.php", "phpmyadmin",
+                            "phpinfo", "/api/v1", "/api/v2", "/api/v3",
+                            "/admin.php", "/admin/login", "/admin/index.php",
+                            "/config.php", "/.well-known/security",
+                            "/server-status", "/cgi-bin/", "/owa/",
+                        )
+                        if any(m in _path_lower for m in _SCANNER_MARKERS):
+                            source = "scanner_bot"
                     # Intelligence: classify caller + flag hallucination candidates
                     agent_client_val = _parse_agent_client(ua)
                     is_hallucination_val = (
@@ -4854,23 +4958,33 @@ def _log_usage(ecosystem: str, package: str, request: Request = None,
         except Exception:
             pass
     # Real-time admin feed — non-blocking.  # PATCH_LIVE_FEED_V1
+    # Skip publishing self-loopback / internal infra so SSE feed mirrors DB.
     try:
-        import asyncio as _aio
-        _aio.create_task(_publish_live_event({
-            "ecosystem": ecosystem,
-            "package": package,
-            "endpoint": endpoint or "check",
-            "agent": _parse_agent_client(request.headers.get("User-Agent", "") if request else ""),
-            "kind": _agent_kind(_parse_agent_client(request.headers.get("User-Agent", "") if request else "")),
-            "country": (request.headers.get("CF-IPCountry", "") if request else "") or None,
-            "status": status_code,
-            "ms": response_time_ms,
-            "cache_hit": cache_hit,
-            "mcp_tool": (request.headers.get("X-MCP-Tool", "") if request else None) or None,
-            "ts": __import__("time").time(),
-        }))
+        _ip_for_check = ""
+        if request:
+            _ip_for_check = request.headers.get("CF-Connecting-IP",
+                request.client.host if request.client else "")
     except Exception:
-        pass
+        _ip_for_check = ""
+    _hash_for_check = _hash_ip(_ip_for_check) if _ip_for_check else None
+    if not _is_excluded_ip(_ip_for_check) and (not _hash_for_check or _hash_for_check not in SELF_IP_HASHES):
+        try:
+            import asyncio as _aio
+            _aio.create_task(_publish_live_event({
+                "ecosystem": ecosystem,
+                "package": package,
+                "endpoint": endpoint or "check",
+                "agent": _parse_agent_client(request.headers.get("User-Agent", "") if request else ""),
+                "kind": _agent_kind(_parse_agent_client(request.headers.get("User-Agent", "") if request else "")),
+                "country": (request.headers.get("CF-IPCountry", "") if request else "") or None,
+                "status": status_code,
+                "ms": response_time_ms,
+                "cache_hit": cache_hit,
+                "mcp_tool": (request.headers.get("X-MCP-Tool", "") if request else None) or None,
+                "ts": __import__("time").time(),
+            }))
+        except Exception:
+            pass
     asyncio.create_task(_log())
 
 
@@ -4947,7 +5061,7 @@ async def gdpr_export(request: Request):
             """SELECT id, created_at, endpoint, ecosystem, package_name,
                       user_agent, source, country, cache_hit, session_id,
                       status_code, mcp_tool, agent_client, is_hallucination
-               FROM api_usage WHERE ip_hash=$1
+               FROM api_usage_public WHERE ip_hash=$1
                ORDER BY created_at DESC
                LIMIT 10000""",
             ip_hash,
@@ -5005,24 +5119,27 @@ async def admin_sources(request: Request):
     async with pool.acquire() as conn:
         by_source = await conn.fetch("""
             SELECT COALESCE(source, 'unknown') as source, COUNT(*) as calls
-            FROM api_usage WHERE source != '' AND source IS NOT NULL
+            FROM api_usage_public WHERE source != '' AND source IS NOT NULL
+              AND COALESCE(ip_hash, '') NOT IN (SELECT UNNEST($1::text[]))
             GROUP BY source ORDER BY calls DESC
-        """)
+        """, list(SELF_IP_HASHES))
         by_source_today = await conn.fetch("""
             SELECT COALESCE(source, 'unknown') as source, COUNT(*) as calls
-            FROM api_usage WHERE source != '' AND source IS NOT NULL
-            AND created_at > NOW() - INTERVAL '1 day'
+            FROM api_usage_public WHERE source != '' AND source IS NOT NULL
+              AND created_at > NOW() - INTERVAL '1 day'
+              AND COALESCE(ip_hash, '') NOT IN (SELECT UNNEST($1::text[]))
             GROUP BY source ORDER BY calls DESC
-        """)
+        """, list(SELF_IP_HASHES))
         by_source_week = await conn.fetch("""
             SELECT COALESCE(source, 'unknown') as source, COUNT(*) as calls
-            FROM api_usage WHERE source != '' AND source IS NOT NULL
-            AND created_at > NOW() - INTERVAL '7 days'
+            FROM api_usage_public WHERE source != '' AND source IS NOT NULL
+              AND created_at > NOW() - INTERVAL '7 days'
+              AND COALESCE(ip_hash, '') NOT IN (SELECT UNNEST($1::text[]))
             GROUP BY source ORDER BY calls DESC
-        """)
+        """, list(SELF_IP_HASHES))
         rapidapi_users = await conn.fetch("""
             SELECT DISTINCT ip_hash AS ip_identifier, user_agent, MAX(created_at) as last_seen
-            FROM api_usage WHERE source = 'rapidapi'
+            FROM api_usage_public WHERE source = 'rapidapi'
             GROUP BY ip_hash, user_agent ORDER BY last_seen DESC LIMIT 20
         """)
     return {
@@ -5074,8 +5191,8 @@ async def openapi_for_gpt():
                 "when they install dependencies: does the package exist, is it "
                 "malicious or a typosquat, is it actively exploited (CISA KEV), is "
                 "it deprecated, what are the safe alternatives, what breaks when "
-                "upgrading v1→v2. 31,000+ packages across 19 ecosystems, "
-                "2,200+ CVEs enriched with EPSS + CISA KEV. Zero auth, 100 req/min "
+                "upgrading v1→v2. 749,000+ packages across 19 ecosystems, "
+                "17,290 CVEs enriched with EPSS + CISA KEV. Zero auth, 100 req/min "
                 "anonymous, MIT.\n\n"
                 "USAGE RULES FOR THE MODEL:\n"
                 "1. Before recommending any package install, call getPackagePrompt "
@@ -5716,8 +5833,8 @@ async def admin_stats_full(request: Request):
     async with pool.acquire() as conn:
         pkg_count = await conn.fetchval("SELECT COUNT(*) FROM packages")
         vuln_count = await conn.fetchval("SELECT COUNT(*) FROM vulnerabilities")
-        usage_today = await conn.fetchval("SELECT COUNT(*) FROM api_usage WHERE created_at > NOW() - INTERVAL '1 day' AND user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent NOT ILIKE '%spider%' AND user_agent NOT ILIKE '%GoogleOther%' AND user_agent != ''")
-        usage_total = await conn.fetchval("SELECT COUNT(*) FROM api_usage WHERE user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent NOT ILIKE '%spider%' AND user_agent NOT ILIKE '%GoogleOther%' AND user_agent != ''")
+        usage_today = await conn.fetchval("SELECT COUNT(*) FROM api_usage_public WHERE created_at > NOW() - INTERVAL '1 day' AND user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent NOT ILIKE '%spider%' AND user_agent NOT ILIKE '%GoogleOther%' AND user_agent != ''")
+        usage_total = await conn.fetchval("SELECT COUNT(*) FROM api_usage_public WHERE user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent NOT ILIKE '%spider%' AND user_agent NOT ILIKE '%GoogleOther%' AND user_agent != ''")
         users_count = await conn.fetchval("SELECT COUNT(*) FROM users")
     return {
         "packages_indexed": pkg_count,
@@ -5790,7 +5907,7 @@ async def admin_overview(request: Request, range: str = "30d"):
                     COALESCE(
                         PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time_ms)::int, 0
                     ) AS p95_ms
-                FROM api_usage
+                FROM api_usage_public
                 WHERE {where_range} AND {flt}
             """)
             calls = row["calls"] or 0
@@ -5955,7 +6072,7 @@ async def admin_insights(request: Request):
             SELECT DATE_TRUNC('hour', created_at) AS hr,
                    COUNT(*)                    AS calls,
                    COUNT(DISTINCT ip_hash)  AS ips
-            FROM api_usage
+            FROM api_usage_public
             WHERE source = 'browser'
             GROUP BY hr
             HAVING COUNT(*) > 200
@@ -6019,7 +6136,7 @@ async def admin_timeseries(request: Request, range: str = "7d", view: str = "all
                    COALESCE(
                        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY response_time_ms)::int, 0
                    ) AS p95_ms
-            FROM api_usage
+            FROM api_usage_public
             WHERE {where_range} AND {flt}
             GROUP BY day ORDER BY day
         """)
@@ -6030,7 +6147,7 @@ async def admin_timeseries(request: Request, range: str = "7d", view: str = "all
             SELECT EXTRACT(DOW  FROM created_at AT TIME ZONE 'Europe/Rome')::int AS dow,
                    EXTRACT(HOUR FROM created_at AT TIME ZONE 'Europe/Rome')::int AS hour,
                    COUNT(*) AS n
-            FROM api_usage
+            FROM api_usage_public
             WHERE {where_range} AND {flt}
             GROUP BY dow, hour
         """)
@@ -6038,7 +6155,7 @@ async def admin_timeseries(request: Request, range: str = "7d", view: str = "all
         endpoint_rows = await conn.fetch(f"""
             SELECT COALESCE(NULLIF(endpoint, ''), 'unknown') AS endpoint,
                    COUNT(*) AS calls
-            FROM api_usage
+            FROM api_usage_public
             WHERE {where_range} AND {flt}
             GROUP BY endpoint ORDER BY calls DESC LIMIT 15
         """)
@@ -6047,7 +6164,7 @@ async def admin_timeseries(request: Request, range: str = "7d", view: str = "all
             SELECT DATE(created_at) AS day,
                    COALESCE(NULLIF(source, ''), 'unknown') AS source,
                    COUNT(*) AS n
-            FROM api_usage
+            FROM api_usage_public
             WHERE {where_range} AND source IS NOT NULL
             GROUP BY day, source ORDER BY day
         """)
@@ -6130,16 +6247,16 @@ async def admin_plan_metrics(request: Request):
             """
         )
         usage_total = await conn.fetchval(
-            "SELECT COUNT(*) FROM api_usage WHERE user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent != ''"
+            "SELECT COUNT(*) FROM api_usage_public WHERE user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent != ''"
         ) or 0
         usage_30d = await conn.fetchval(
-            "SELECT COUNT(*) FROM api_usage WHERE created_at > NOW() - INTERVAL '30 days' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent != ''"
+            "SELECT COUNT(*) FROM api_usage_public WHERE created_at > NOW() - INTERVAL '30 days' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent != ''"
         ) or 0
         usage_7d = await conn.fetchval(
-            "SELECT COUNT(*) FROM api_usage WHERE created_at > NOW() - INTERVAL '7 days' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent != ''"
+            "SELECT COUNT(*) FROM api_usage_public WHERE created_at > NOW() - INTERVAL '7 days' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent != ''"
         ) or 0
         unique_ips_30d = await conn.fetchval(
-            "SELECT COUNT(DISTINCT ip_hash) FROM api_usage WHERE created_at > NOW() - INTERVAL '30 days' AND ip_hash IS NOT NULL"
+            "SELECT COUNT(DISTINCT ip_hash) FROM api_usage_public WHERE created_at > NOW() - INTERVAL '30 days' AND ip_hash IS NOT NULL"
         ) or 0
         users_count = await conn.fetchval("SELECT COUNT(*) FROM users") or 0
         users_by_plan = await conn.fetch(
@@ -6953,26 +7070,26 @@ async def admin_charts(request: Request):
 
         api_hourly = await conn.fetch(
             "SELECT date_trunc('hour', created_at) as hour, COUNT(*) as calls "
-            "FROM api_usage WHERE created_at > NOW() - INTERVAL '3 days' "
+            "FROM api_usage_public WHERE created_at > NOW() - INTERVAL '3 days' "
             "AND user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' "
             "GROUP BY hour ORDER BY hour"
         )
 
         api_daily = await conn.fetch(
             "SELECT DATE(created_at) as day, COUNT(*) as calls "
-            "FROM api_usage WHERE user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' "
+            "FROM api_usage_public WHERE user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' "
             "GROUP BY day ORDER BY day"
         )
 
         sources_raw = await conn.fetch(
             "SELECT DATE(created_at) as day, source, COUNT(*) as cnt "
-            "FROM api_usage WHERE source != '' AND source IS NOT NULL "
+            "FROM api_usage_public WHERE source != '' AND source IS NOT NULL "
             "GROUP BY day, source ORDER BY day"
         )
 
         eco_raw = await conn.fetch(
             "SELECT DATE(created_at) as day, ecosystem, COUNT(*) as cnt "
-            "FROM api_usage WHERE user_agent NOT ILIKE '%node%' "
+            "FROM api_usage_public WHERE user_agent NOT ILIKE '%node%' "
             "AND ecosystem IS NOT NULL AND ecosystem != '' "
             "GROUP BY day, ecosystem ORDER BY day"
         )
@@ -7156,10 +7273,10 @@ async def get_savings():
     async with pool.acquire() as conn:
         # Chiamate reali (no bot, no cron)
         total_real = await conn.fetchval(
-            "SELECT COUNT(*) FROM api_usage WHERE user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent NOT ILIKE '%spider%' AND user_agent NOT ILIKE '%GoogleOther%' AND user_agent != ''"
+            "SELECT COUNT(*) FROM api_usage_public WHERE user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent NOT ILIKE '%spider%' AND user_agent NOT ILIKE '%GoogleOther%' AND user_agent != ''"
         )
         today_real = await conn.fetchval(
-            "SELECT COUNT(*) FROM api_usage WHERE created_at > CURRENT_DATE AND user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent NOT ILIKE '%spider%' AND user_agent NOT ILIKE '%GoogleOther%' AND user_agent != ''"
+            "SELECT COUNT(*) FROM api_usage_public WHERE created_at > CURRENT_DATE AND user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent NOT ILIKE '%spider%' AND user_agent NOT ILIKE '%GoogleOther%' AND user_agent != ''"
         )
 
     tokens_without = 8500
@@ -7226,7 +7343,7 @@ async def get_savings():
     pool = await get_pool()
     async with pool.acquire() as conn:
         total_checks = await conn.fetchval(
-            "SELECT COUNT(*) FROM api_usage WHERE NOT (COALESCE(user_agent, '') LIKE 'DepScope-%' OR COALESCE(user_agent, '') LIKE '%CacheWarmer%')"
+            "SELECT COUNT(*) FROM api_usage_public WHERE NOT (COALESCE(user_agent, '') LIKE 'DepScope-%' OR COALESCE(user_agent, '') LIKE '%CacheWarmer%')"
         )
 
     tokens_without = 8500   # avg tokens per check without DepScope
@@ -7902,7 +8019,7 @@ async def intelligence_dashboard(request: Request):
     async with pool.acquire() as conn:
         top_searches = await conn.fetch("""
             SELECT ecosystem, package_name, COUNT(*) AS calls
-            FROM api_usage
+            FROM api_usage_public
             WHERE created_at > NOW() - INTERVAL '24 hours'
               AND COALESCE(source, '') NOT IN ('sdk', 'claude_bot', 'gpt_bot', 'internal')
               AND package_name IS NOT NULL AND package_name <> ''
@@ -7914,16 +8031,17 @@ async def intelligence_dashboard(request: Request):
             SELECT COALESCE(source, 'unknown') AS source,
                    COUNT(*) AS calls,
                    COUNT(DISTINCT ip_hash) AS unique_ips
-            FROM api_usage
+            FROM api_usage_public
             WHERE created_at > NOW() - INTERVAL '7 days' AND COALESCE(source, '') <> ''
+              AND COALESCE(ip_hash, '') NOT IN (SELECT UNNEST($1::text[]))
             GROUP BY source
             ORDER BY calls DESC
-        """)
+        """, list(SELF_IP_HASHES))
         countries = await conn.fetch("""
             SELECT country,
                    COUNT(*) AS calls,
                    COUNT(DISTINCT ip_hash) AS unique_ips
-            FROM api_usage
+            FROM api_usage_public
             WHERE country IS NOT NULL AND created_at > NOW() - INTERVAL '7 days'
             GROUP BY country
             ORDER BY calls DESC
@@ -7952,7 +8070,7 @@ async def intelligence_dashboard(request: Request):
         """)
         error_searches = await conn.fetch("""
             SELECT package_name AS error_query, COUNT(*) AS searches
-            FROM api_usage
+            FROM api_usage_public
             WHERE endpoint LIKE 'error%'
               AND created_at > NOW() - INTERVAL '7 days'
               AND package_name IS NOT NULL AND package_name <> ''
@@ -7977,7 +8095,7 @@ async def intelligence_dashboard(request: Request):
                    AVG(response_time_ms)::INT AS avg_ms_7d,
                    SUM(CASE WHEN cache_hit THEN 1 ELSE 0 END)::FLOAT
                      / GREATEST(COUNT(*),1) AS cache_hit_rate_7d
-            FROM api_usage
+            FROM api_usage_public
             WHERE created_at > NOW() - INTERVAL '7 days'
         """)
     return {
@@ -8214,9 +8332,9 @@ async def launch_metrics(request: Request):
         """)
 
         # API traffic (last 24h)
-        api_24h = await conn.fetchval("SELECT COUNT(*) FROM api_usage WHERE created_at > NOW() - INTERVAL '24 hours'")
-        api_total = await conn.fetchval("SELECT COUNT(*) FROM api_usage")
-        api_ips = await conn.fetchval("SELECT COUNT(DISTINCT ip_hash) FROM api_usage WHERE created_at > NOW() - INTERVAL '24 hours'")
+        api_24h = await conn.fetchval("SELECT COUNT(*) FROM api_usage_public WHERE created_at > NOW() - INTERVAL '24 hours'")
+        api_total = await conn.fetchval("SELECT COUNT(*) FROM api_usage_public")
+        api_ips = await conn.fetchval("SELECT COUNT(DISTINCT ip_hash) FROM api_usage_public WHERE created_at > NOW() - INTERVAL '24 hours'")
 
     # GitHub (new account)
     gh_stars = gh_forks = gh_watchers = 0

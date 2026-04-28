@@ -39,7 +39,7 @@
 | @t3dotgg | Theo Browne | Twitter/YouTube | 300K+ | Web/JS ecosystem. Lead with npm data. Might make a video. |
 | @kelseyhightower | Kelsey Hightower | Twitter | 250K+ | Infrastructure/DevOps. Supply chain security angle. |
 | @FiloSottile | Filippo Valsorda | Twitter | 50K+ | Go/security. Supply chain focus. Might appreciate methodology. |
-| @feaboricmaps | — | Hacker News | — | Post to HN Show as "Show HN: DepScope — health scores for 14,700+ packages across 17 ecosystems" |
+| @feaboricmaps | — | Hacker News | — | Post to HN Show as "Show HN: DepScope — health scores for 14,700+ packages across 19 ecosystems" |
 
 ---
 

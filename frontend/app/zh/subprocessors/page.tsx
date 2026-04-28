@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalLayoutZh, Sec, Strong, A } from "../../../components/legal/LegalLayoutZh";
 
 export const metadata: Metadata = {
-  title: "子处理者 — DepScope",
+  title: "子处理者",
   description: "DepScope 使用的第三方子处理者及其作用。",
   alternates: {
     canonical: "https://depscope.dev/zh/subprocessors",

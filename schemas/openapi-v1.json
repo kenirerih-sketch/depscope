@@ -3,7 +3,7 @@
     "info": {
         "title": "DepScope \u2014 Package Intelligence API",
         "summary": "Free, open API that tells AI agents if a package is safe, maintained, and up-to-date before they suggest installing it.",
-        "description": "# DepScope\n\nPackage Intelligence for AI coding agents. **31,000+ packages** across **17 ecosystems** (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew), **2,200+ CVEs** enriched with CISA KEV + EPSS. Three verticals on one shared infrastructure:\n\n1. **Package health** \u2014 /api/check for full report, /api/prompt for LLM-optimized text (~74% smaller), /api/alternatives for replacements, /api/scan to audit a lockfile.\n2. **Error -> fix database** \u2014 POST a stack trace to /api/error/resolve.\n3. **Stack compatibility matrix** \u2014 /api/compat?stack=next@16,react@19.\n\n## Quick start (for agents)\n\n    curl https://depscope.dev/api/prompt/npm/react\n\n## MCP server\n\nZero-install remote URL: `https://mcp.depscope.dev/mcp`. 22 tools. Install in one line: `claude mcp add depscope https://mcp.depscope.dev/mcp`.\n\n## Rate limits\n\n100 req/min anonymous, 200/min for whitelisted AI UAs (ClaudeBot, GPTBot, Cursor, MCP-Client, \u2026). Optional API keys for higher limits.\n\nSave tokens, save energy, ship safer code.",
+        "description": "# DepScope\n\nPackage Intelligence for AI coding agents. **749,000+ packages** across **19 ecosystems** (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew), **17,290 CVEs** enriched with CISA KEV + EPSS. Three verticals on one shared infrastructure:\n\n1. **Package health** \u2014 /api/check for full report, /api/prompt for LLM-optimized text (~74% smaller), /api/alternatives for replacements, /api/scan to audit a lockfile.\n2. **Error -> fix database** \u2014 POST a stack trace to /api/error/resolve.\n3. **Stack compatibility matrix** \u2014 /api/compat?stack=next@16,react@19.\n\n## Quick start (for agents)\n\n    curl https://depscope.dev/api/prompt/npm/react\n\n## MCP server\n\nZero-install remote URL: `https://mcp.depscope.dev/mcp`. 22 tools. Install in one line: `claude mcp add depscope https://mcp.depscope.dev/mcp`.\n\n## Rate limits\n\n100 req/min anonymous, 200/min for whitelisted AI UAs (ClaudeBot, GPTBot, Cursor, MCP-Client, \u2026). Optional API keys for higher limits.\n\nSave tokens, save energy, ship safer code.",
         "termsOfService": "https://depscope.dev/terms",
         "contact": {
             "name": "DepScope support",
@@ -22,11 +22,7 @@
             "url": "https://depscope.dev",
             "description": "Production"
         },
-        {
-            "url": "https://stage.depscope.dev",
-            "description": "Staging"
-        }
-    ],
+        ],
     "paths": {
         "/api/auth/magic-link": {
             "post": {

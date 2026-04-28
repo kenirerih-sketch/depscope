@@ -3,7 +3,7 @@ import Link from "next/link";
 import { PageHeader, Section, Card, CardBody, Footer } from "../../../components/ui";
 
 export const metadata: Metadata = {
-  title: "法律 — DepScope",
+  title: "法律",
   description: "DepScope 的所有法律、隐私、安全和署名文档。",
   alternates: {
     canonical: "https://depscope.dev/zh/legal",

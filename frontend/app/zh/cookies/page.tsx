@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalLayoutZh, Sec, Strong, A } from "../../../components/legal/LegalLayoutZh";
 
 export const metadata: Metadata = {
-  title: "Cookie 政策 — DepScope",
+  title: "Cookie 政策",
   description: "DepScope 使用的 Cookie、原因，以及如何更改您的偏好。",
   alternates: {
     canonical: "https://depscope.dev/zh/cookies",

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "AI助手设置 | DepScope",
+  title: "AI助手设置",
   alternates: { canonical: "https://depscope.dev/zh/agent-setup" },
 };
 

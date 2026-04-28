@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Known Bugs per Version | DepScope",
+  title: "Known Bugs per Version",
   description:
     "Find known bugs, regressions, and breaking changes per version across npm, PyPI, Cargo and 14 more ecosystems. Skip buggy releases before you install.",
   keywords: [
@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     "cargo crate regressions", "breaking changes package",
   ],
   openGraph: {
-    title: "Known Bugs per Version | DepScope",
+    title: "Known Bugs per Version",
     description: "Skip buggy releases. Per-version bug database across 19 ecosystems.",
     url: "https://depscope.dev/explore/bugs",
     siteName: "DepScope",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Known Bugs per Version | DepScope",
+    title: "Known Bugs per Version",
     description: "Per-version bug database across 19 ecosystems.",
   },
   alternates: {

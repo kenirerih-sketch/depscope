@@ -53,7 +53,7 @@ export function useAdmin<T = any>(path: string): AdminState<T> {
 }
 
 // Combine multiple admin endpoints
-export function useAdminMany<T extends Record<string, any>>(paths: Record<keyof T, string>): {
+export function useAdminMany<T extends Record<string, any>>(paths: Record<keyof T, string>, intervalMs?: number): {
   data: Partial<T>;
   loading: boolean;
   errors: Partial<Record<keyof T, string>>;
@@ -63,7 +63,8 @@ export function useAdminMany<T extends Record<string, any>>(paths: Record<keyof 
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    let timer: any = null;
+    const fetchAll = async () => {
       const entries = Object.entries(paths) as [string, string][];
       const results = await Promise.all(entries.map(async ([k, p]) => {
         try {
@@ -90,9 +91,16 @@ export function useAdminMany<T extends Record<string, any>>(paths: Record<keyof 
         const next = encodeURIComponent(window.location.pathname + window.location.search);
         window.location.href = `/admin-login?next=${next}`;
       }
-    })();
-    return () => { cancelled = true; };
-  }, [JSON.stringify(paths)]);
+    };
+    fetchAll();
+    if (intervalMs && intervalMs > 0) {
+      timer = setInterval(fetchAll, intervalMs);
+    }
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [JSON.stringify(paths), intervalMs]);
 
   return state;
 }
@@ -122,7 +130,7 @@ export function NeedsAuthBanner() {
       Open <a className="underline" style={{ color: "var(--accent)" }}
               href={`${origin}/login`}>{origin}/login</a> and sign in with your admin account.
       Session cookies are scoped per-subdomain: if you logged in on depscope.dev
-      but are viewing stage.depscope.dev (or vice-versa), you'll need to log in
+      but are viewing  (or vice-versa), you'll need to log in
       here separately.
     </div>
   );

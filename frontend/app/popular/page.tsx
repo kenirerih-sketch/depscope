@@ -32,10 +32,10 @@ interface HealthData {
 }
 
 export const metadata: Metadata = {
-  title: "Popular Packages — Most Searched | DepScope",
+  title: "Popular Packages — Most Searched",
   description: "Most searched packages on DepScope. Health scores, vulnerability data, and recommendations for trending packages across 19 ecosystems.",
   openGraph: {
-    title: "Popular Packages — Most Searched | DepScope",
+    title: "Popular Packages — Most Searched",
     description: "Trending packages with health scores and vulnerability data. Free package intelligence by DepScope.",
     url: "https://depscope.dev/popular",
     siteName: "DepScope",

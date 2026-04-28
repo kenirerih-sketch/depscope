@@ -94,6 +94,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // Discovery
     { url: `${BASE}/popular`, changeFrequency: "daily", priority: 0.9, lastModified: now },
     { url: `${BASE}/stats`, changeFrequency: "daily", priority: 0.7, lastModified: now },
+    // Benchmark (public dataset + measured results across 10 LLMs)
+    { url: `${BASE}/benchmark`, changeFrequency: "daily", priority: 0.95, lastModified: now },
     // Developer docs
     { url: `${BASE}/api-docs`, changeFrequency: "weekly", priority: 0.9, lastModified: now },
     { url: `${BASE}/agent-setup`, changeFrequency: "weekly", priority: 0.9, lastModified: now },

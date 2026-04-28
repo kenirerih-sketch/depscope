@@ -62,7 +62,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   if (!data) {
     return {
-      title: "Error not found | DepScope",
+      title: "Error not found",
       description: "This error pattern has not been indexed. Search similar errors on DepScope.",
       robots: { index: false, follow: true },
     };

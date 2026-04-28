@@ -35,7 +35,7 @@ DepScope is a shared cache + live OSV + GitHub Advisory Database as an
 API. A dedicated /api/prompt endpoint returns a ~74% smaller payload than
 raw registry JSON for the same decision (natural-language string, not
 JSON the model has to parse). MCP server ships on npm for Claude Desktop
-/ Cursor integration. Covers 17 ecosystems (npm, PyPI, Cargo, Go, Maven,
+/ Cursor integration. Covers 19 ecosystems (npm, PyPI, Cargo, Go, Maven,
 NuGet, RubyGems, + 10 more).
 
 Open infrastructure, MIT, EU-hosted.

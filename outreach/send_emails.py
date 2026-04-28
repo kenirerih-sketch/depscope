@@ -22,7 +22,7 @@ EMAILS = [
         "subject": "Data: 35% of popular packages score below 60/100 in new health analysis",
         "body": """Hi DevClass team,
 
-We analyzed the health of 14,700+ packages across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more) ecosystems and published the findings as an open report.
+We analyzed the health of 14,700+ packages across 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more) ecosystems and published the findings as an open report.
 
 Key data points:
 
@@ -72,7 +72,7 @@ Cuttalo srl""",
         "subject": "Supply chain data: deprecated npm packages still get 80M+ downloads/week",
         "body": """Hi,
 
-New supply chain security data: we analyzed 14,700+ packages across 17 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more).
+New supply chain security data: we analyzed 14,700+ packages across 19 ecosystems (npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems and 10 more).
 
 The most alarming finding: deprecated packages with known issues are still massively downloaded because they're buried in dependency trees:
 

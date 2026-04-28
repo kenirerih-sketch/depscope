@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "联系我们 | DepScope",
+  title: "联系我们",
   alternates: { canonical: "https://depscope.dev/zh/contact" },
 };
 

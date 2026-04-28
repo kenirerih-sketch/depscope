@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalLayout, Sec, Strong, A } from "../../components/legal/LegalLayout";
 
 export const metadata: Metadata = {
-  title: "Imprint — DepScope",
+  title: "Imprint",
   description:
     "Legal disclosures for DepScope as required by art. 7 D.Lgs. 70/2003 (Italy).",
   alternates: {

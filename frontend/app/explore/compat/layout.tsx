@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Stack Compatibility Matrix | DepScope",
+  title: "Stack Compatibility Matrix",
   description:
     "Verify your package stack works before you install. React + Next.js + Tailwind? Django + Celery + Redis? Check verified and broken stacks across npm, PyPI, and more.",
   keywords: [
@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     "dependency resolver", "peer dependency check",
   ],
   openGraph: {
-    title: "Stack Compatibility Matrix | DepScope",
+    title: "Stack Compatibility Matrix",
     description: "Verified and broken package combinations — know before you install.",
     url: "https://depscope.dev/explore/compat",
     siteName: "DepScope",
@@ -18,7 +18,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Stack Compatibility Matrix | DepScope",
+    title: "Stack Compatibility Matrix",
     description: "Verified and broken package combinations.",
   },
   alternates: {

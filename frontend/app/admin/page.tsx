@@ -9,15 +9,16 @@ import { LiveFeed } from "./LiveFeed";
 
 export default function AdminOverviewPage() {
   const s = useAdminMany<{
-    dash: any; ts: any; stats: any; pm: any; auto: any; intel: any;
+    dash: any; ts: any; stats: any; pm: any; auto: any; intel: any; sources: any;
   }>({
-    dash:  "/api/admin/dashboard",
-    ts:    "/api/admin/timeseries?range=30d&view=all",
-    stats: "/api/stats",
-    pm:    "/api/admin/plan-metrics",
-    auto:  "/api/admin/automation",
-    intel: "/api/admin/intelligence",
-  });
+    dash:    "/api/admin/dashboard",
+    ts:      "/api/admin/timeseries?range=30d&view=all",
+    stats:   "/api/stats",
+    pm:      "/api/admin/plan-metrics",
+    auto:    "/api/admin/automation",
+    intel:   "/api/admin/intelligence",
+    sources: "/api/admin/sources",
+  }, 30000);  // refresh every 30s
 
   if (s.loading) return <AdminShell title="Overview"><Card>Loading…</Card></AdminShell>;
 
@@ -167,6 +168,11 @@ export default function AdminOverviewPage() {
         </Card>
       </div>
 
+      {/* Live traffic breakdown — auto-refresh every 30s */}
+      <div className="mt-6">
+        <LiveTrafficPanel sources={s.data.sources} />
+      </div>
+
       <div className="grid grid-cols-3 gap-4 mt-6">
         <Card title="Top packages (24h)"
               action={<a href="/admin/traffic" className="text-xs hover:text-[var(--accent)]"
@@ -223,3 +229,97 @@ function Nav({ href, label }: { href: string; label: string }) {
     </a>
   );
 }
+
+// ----- Live traffic panel (auto-refresh) -----
+const BOT_GROUPS: Record<string, string[]> = {
+  "AI Labs (training scrape)": ["apple_bot", "gpt_bot", "claude_bot", "amazon_bot", "google_bot", "meta_bot", "perplexity_bot", "yandex_bot", "bing_bot", "seo_bot", "scanner_bot"],
+  "IDE / Real clients":        ["claude", "cursor", "gpt", "rapidapi", "sdk"],
+  "MCP protocol":              [],
+  "Browser":                   ["browser"],
+  "Other":                     ["unknown", ""],
+};
+
+function LiveTrafficPanel({ sources }: { sources: any }) {
+  if (!sources || sources._err || sources._auth) {
+    return (
+      <div className="rounded-lg p-4 text-xs"
+           style={{ background: "var(--bg-card)", border: "1px solid var(--border)", color: "var(--text-faded)" }}>
+        Live traffic — no data yet.
+      </div>
+    );
+  }
+  const today = (sources.today || {}) as Record<string, number>;
+  const week = (sources.week || {}) as Record<string, number>;
+
+  const groupTotals: Record<string, { day: number; week: number; sources: { name: string; day: number; week: number }[] }> = {};
+  for (const g of Object.keys(BOT_GROUPS)) groupTotals[g] = { day: 0, week: 0, sources: [] };
+
+  const placeSource = (src: string, day: number, week: number) => {
+    for (const [group, members] of Object.entries(BOT_GROUPS)) {
+      if (members.includes(src)) {
+        groupTotals[group].day += day;
+        groupTotals[group].week += week;
+        groupTotals[group].sources.push({ name: src, day, week });
+        return true;
+      }
+    }
+    if (src.startsWith("mcp:")) {
+      groupTotals["MCP protocol"].day += day;
+      groupTotals["MCP protocol"].week += week;
+      groupTotals["MCP protocol"].sources.push({ name: src, day, week });
+      return true;
+    }
+    return false;
+  };
+
+  for (const [src, calls] of Object.entries(today)) placeSource(src, calls, week[src] || 0);
+  for (const [src, calls] of Object.entries(week)) {
+    if (today[src]) continue;
+    placeSource(src, 0, calls);
+  }
+
+  const order = ["AI Labs (training scrape)", "IDE / Real clients", "MCP protocol", "Browser", "Other"];
+  const totalDay = order.reduce((s, g) => s + groupTotals[g].day, 0);
+  const totalWeek = order.reduce((s, g) => s + groupTotals[g].week, 0);
+
+  return (
+    <div className="rounded-lg"
+         style={{ background: "var(--bg-card)", border: "1px solid var(--border)" }}>
+      <div className="flex items-center justify-between px-4 py-3"
+           style={{ borderBottom: "1px solid var(--border)" }}>
+        <div className="text-sm font-medium" style={{ color: "var(--text)" }}>
+          Live traffic — who&apos;s calling DepScope
+        </div>
+        <div className="text-xs" style={{ color: "var(--text-faded)" }}>
+          auto-refresh 30s · {totalDay.toLocaleString()} calls / 24h · {totalWeek.toLocaleString()} / 7d
+        </div>
+      </div>
+      <div className="grid grid-cols-5 gap-3 p-4 text-xs">
+        {order.map((g) => {
+          const data = groupTotals[g];
+          const dayPct = totalDay ? Math.round((data.day / totalDay) * 100) : 0;
+          const weekPct = totalWeek ? Math.round((data.week / totalWeek) * 100) : 0;
+          return (
+            <div key={g} className="rounded p-2"
+                 style={{ background: "var(--bg-hover)", border: "1px solid var(--border)" }}>
+              <div className="font-medium mb-1" style={{ color: "var(--text)" }}>{g}</div>
+              <div className="text-lg font-semibold" style={{ color: "var(--text)" }}>{data.day.toLocaleString()}</div>
+              <div style={{ color: "var(--text-faded)" }}>24h · {dayPct}%</div>
+              <div className="mt-1" style={{ color: "var(--text-dim)" }}>{data.week.toLocaleString()} / 7d ({weekPct}%)</div>
+              <div className="mt-2 space-y-0.5">
+                {data.sources.sort((a, b) => b.week - a.week).slice(0, 4).map((src) => (
+                  <div key={src.name} className="flex justify-between" style={{ color: "var(--text-faded)" }}>
+                    <span className="truncate mr-2">{src.name || "—"}</span>
+                    <span>{src.week.toLocaleString()}</span>
+                  </div>
+                ))}
+                {data.sources.length === 0 && <div style={{ color: "var(--text-faded)" }}>—</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+

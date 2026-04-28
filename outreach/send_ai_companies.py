@@ -172,7 +172,7 @@ Vincenzo Rubino - depscope@cuttalo.com"""
         "subject": "Free package health API for Replit Agent — verify before install",
         "body": f"""Hi Replit team,
 
-DepScope ({SITE}) provides real-time package health data for 17 ecosystems. Replit Agent could call our API before suggesting package installs to avoid deprecated, vulnerable, or unmaintained packages.
+DepScope ({SITE}) provides real-time package health data for 19 ecosystems. Replit Agent could call our API before suggesting package installs to avoid deprecated, vulnerable, or unmaintained packages.
 
 Free, no auth, 200 req/min. 10 endpoints including check, search, compare, scan.
 

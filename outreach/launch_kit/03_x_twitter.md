@@ -40,7 +40,7 @@ Built depscope.dev — the shared layer.
 OSV + GitHub Advisory Database as a live API.
 A /api/prompt endpoint returns a 74%-smaller payload than raw registry JSON.
 MCP server ships on npm.
-17 ecosystems. Open infrastructure, MIT.
+19 ecosystems. Open infrastructure, MIT.
 
 curl https://depscope.dev/api/prompt/npm/express
 ```

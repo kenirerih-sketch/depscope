@@ -46,7 +46,7 @@ const UPDATES = [
       "DepScope now has searchable error → fix database, stack compatibility matrix, and known bugs per version across 19 ecosystems.",
   },
   {
-    id: "2026-04-18-17-ecosystems",
+    id: "2026-04-18-19-ecosystems",
     title: "Expanded to 19 ecosystems",
     date: "2026-04-18T00:00:00Z",
     link: `${BASE}/updates`,

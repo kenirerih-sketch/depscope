@@ -267,6 +267,25 @@ interface StatsData {
   intel?: IntelData;
 }
 
+interface BenchConditionStats {
+  hits: number;
+  safe: number;
+  ambiguous: number;
+  errors: number;
+  hit_rate: number;
+}
+interface BenchModel {
+  name: string;
+  provider: string;
+  conditions: Record<string, BenchConditionStats>;
+}
+interface BenchResults {
+  version: string;
+  run_at: string;
+  entry_count: number;
+  models: BenchModel[];
+}
+
 const EXPLORE_CARDS = [
   { href: "/explore/trending", label: "Trending", hint: "Hot now" },
   { href: "/explore/errors", label: "Errors", hint: "Fix any" },
@@ -304,6 +323,7 @@ export default function Home() {
     "pub", "hex", "swift", "cocoapods", "cpan", "hackage", "cran", "conda", "homebrew", "jsr", "julia",
   ]);
   const [stats, setStats] = useState<StatsData | null>(null);
+  const [bench, setBench] = useState<BenchResults | null>(null);
 
   useEffect(() => {
     fetch("/api/stats")
@@ -312,6 +332,13 @@ export default function Home() {
         if (d.ecosystems?.length) setAvailableEcosystems(d.ecosystems);
         setStats(d);
       })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/benchmark/results")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d && setBench(d as BenchResults))
       .catch(() => {});
   }, []);
 
@@ -670,6 +697,155 @@ export default function Home() {
         {/* === LANDING === */}
         {!result && (
           <div className="pb-12 space-y-12">
+            {/* Measured impact — pulled from /api/benchmark/results (the 10-model paper-grade run) */}
+            {bench && bench.models?.length ? (() => {
+              const worst = [...bench.models].sort(
+                (a, b) => (b.conditions.baseline?.hit_rate ?? 0) - (a.conditions.baseline?.hit_rate ?? 0),
+              )[0];
+              const worstBase = Math.round((worst.conditions.baseline?.hit_rate ?? 0) * 100);
+              const worstMcp = Math.round((worst.conditions.with_mcp?.hit_rate ?? 0) * 100);
+              let prevented = 0;
+              let scanned = 0;
+              for (const m of bench.models) {
+                const b = m.conditions.baseline;
+                const w = m.conditions.with_mcp;
+                if (!b || !w) continue;
+                prevented += b.hits - w.hits;
+                scanned += b.hits + b.safe + b.ambiguous;
+              }
+              const per1k = scanned ? Math.round((prevented / scanned) * 1000) : 0;
+              return (
+                <Section
+                  title="Measured impact across 10 models"
+                  description={`Public benchmark — ${bench.entry_count} hallucinated packages × 10 models × 2 conditions. Claude + OpenAI + local (Ollama).`}
+                  actions={
+                    <a
+                      href="/benchmark"
+                      className="text-xs font-mono text-[var(--accent)] hover:underline whitespace-nowrap"
+                    >
+                      full methodology →
+                    </a>
+                  }
+                >
+                  <Card>
+                    {/* Hero stat */}
+                    <div className="px-5 py-5 border-b border-[var(--border)]">
+                      <div className="text-[11px] font-mono uppercase tracking-wider text-[var(--text-faded)] mb-1">
+                        Worst model measured
+                      </div>
+                      <p className="text-sm md:text-base leading-snug text-[var(--text)]">
+                        <span className="font-mono text-[var(--accent)]">{worst.name}</span>{" "}
+                        installs fake packages{" "}
+                        <span className="font-semibold text-[var(--red)]">{worstBase}%</span>{" "}
+                        of the time.{" "}
+                        <span className="text-[var(--text-dim)]">With DepScope MCP:</span>{" "}
+                        <span className="font-semibold" style={{ color: "#4ade80" }}>{worstMcp}%</span>.
+                      </p>
+                    </div>
+
+                    {/* Compact model table */}
+                    <div
+                      className="grid grid-cols-[minmax(140px,1.3fr)_1fr_1fr_60px] gap-3 px-4 py-2 border-b bg-[var(--bg-input)] text-[10px] font-mono uppercase tracking-wider text-[var(--text-faded)]"
+                      style={{ borderColor: "var(--border)" }}
+                    >
+                      <span>Model</span>
+                      <span>Baseline</span>
+                      <span>With MCP</span>
+                      <span className="text-right">Δ</span>
+                    </div>
+                    <div className="divide-y" style={{ borderColor: "var(--border)" }}>
+                      {bench.models.map((m) => {
+                        const b = m.conditions.baseline;
+                        const w = m.conditions.with_mcp;
+                        const bp = b ? Math.round(b.hit_rate * 100) : null;
+                        const wp = w ? Math.round(w.hit_rate * 100) : null;
+                        const delta = bp !== null && wp !== null ? wp - bp : null;
+                        const barCell = (pct: number | null) => {
+                          if (pct === null) return <span className="text-[var(--text-faded)]">n/a</span>;
+                          return (
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-1 rounded-full overflow-hidden" style={{ background: "var(--bg-input)" }}>
+                                <div
+                                  className="h-full rounded-full"
+                                  style={{
+                                    width: `${Math.max(pct, 2)}%`,
+                                    background: pct >= 30 ? "var(--red)" : pct >= 10 ? "var(--accent)" : "#4ade80",
+                                  }}
+                                />
+                              </div>
+                              <span className="tabular-nums text-xs font-mono min-w-[32px] text-right">{pct}%</span>
+                            </div>
+                          );
+                        };
+                        return (
+                          <div
+                            key={m.name}
+                            className="grid grid-cols-[minmax(140px,1.3fr)_1fr_1fr_60px] gap-3 px-4 py-2 text-xs font-mono items-center"
+                          >
+                            <span className="truncate">
+                              <span className="text-[var(--text)]">{m.name}</span>
+                              <span className="ml-2 text-[10px] text-[var(--text-faded)] uppercase">{m.provider}</span>
+                            </span>
+                            <span>{barCell(bp)}</span>
+                            <span>{barCell(wp)}</span>
+                            <span className="tabular-nums text-right">
+                              {delta === null ? (
+                                <span className="text-[var(--text-faded)]">—</span>
+                              ) : (
+                                <span style={{ color: delta < 0 ? "#4ade80" : "var(--red)" }}>
+                                  {delta > 0 ? "+" : ""}{delta}
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Three pillars — compact strip */}
+                    <div
+                      className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x border-t"
+                      style={{ borderColor: "var(--border)", background: "var(--bg-input)" }}
+                    >
+                      <div className="px-4 py-3">
+                        <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-faded)] mb-1">
+                          Tokens / $
+                        </div>
+                        <div className="text-sm font-semibold tabular-nums mb-0.5" style={{ color: "var(--accent)" }}>
+                          ~$16 M / year
+                        </div>
+                        <div className="text-[11px] text-[var(--text-dim)] leading-snug">
+                          At 1 M agent calls/day: ~4,500 tokens saved per check × $10/1 M blended ≈ $16 M/year saved in API fees.
+                        </div>
+                      </div>
+                      <div className="px-4 py-3">
+                        <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-faded)] mb-1">
+                          Energy
+                        </div>
+                        <div className="text-sm font-semibold tabular-nums mb-0.5" style={{ color: "var(--accent)" }}>
+                          ~1 GWh / year
+                        </div>
+                        <div className="text-[11px] text-[var(--text-dim)] leading-snug">
+                          At 1 M agent calls/day × ~3 Wh per check: ~1 GWh/year ≈ 285 EU households for a year.
+                        </div>
+                      </div>
+                      <div className="px-4 py-3">
+                        <div className="text-[10px] font-mono uppercase tracking-wider text-[var(--text-faded)] mb-1">
+                          Security
+                        </div>
+                        <div className="text-sm font-semibold tabular-nums mb-0.5" style={{ color: "var(--accent)" }}>
+                          ~{Math.round(per1k * 365 / 1_000)} M / year blocked
+                        </div>
+                        <div className="text-[11px] text-[var(--text-dim)] leading-snug">
+                          At 1 M agent calls/day: ~{per1k}/1,000 hallucinated installs intercepted → {Math.round(per1k * 365 / 1_000)} M/year. IBM 2024 avg breach: $4.88 M.
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </Section>
+              );
+            })() : null}
+
             {/* Live agent intel — gated: only show once numbers are consistent (threshold raised so low counts don't undermine credibility). */}
             {((stats?.intel?.hallucinations_week ?? 0) >= 5000) && (
               <Section

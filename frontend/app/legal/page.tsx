@@ -3,7 +3,7 @@ import Link from "next/link";
 import { PageHeader, Section, Card, CardBody, Footer } from "../../components/ui";
 
 export const metadata: Metadata = {
-  title: "Legal — DepScope",
+  title: "Legal",
   description:
     "All legal, privacy, security, and attribution documents for DepScope in one place.",
   alternates: {

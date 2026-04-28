@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalLayout, Sec, Strong, A } from "../../components/legal/LegalLayout";
 
 export const metadata: Metadata = {
-  title: "Security — DepScope",
+  title: "Security",
   description:
     "DepScope trust and security overview: infrastructure, encryption, access control, incident response.",
   alternates: {

@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalLayoutZh, Sec, Strong, A } from "../../../components/legal/LegalLayoutZh";
 
 export const metadata: Metadata = {
-  title: "数据署名与许可 — DepScope",
+  title: "数据署名与许可",
   description: "DepScope 使用的公开数据源署名：OSV.dev、GitHub Advisory Database、软件包注册中心。",
   alternates: {
     canonical: "https://depscope.dev/zh/attribution",

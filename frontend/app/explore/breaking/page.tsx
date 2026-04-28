@@ -1,4 +1,11 @@
+import type { Metadata } from "next";
 import { PageHeader, Section, Card, CardBody, Footer } from "../../../components/ui";
+
+export const metadata: Metadata = {
+  title: "Breaking Changes per Major Version",
+  description: "Verified breaking changes between major versions across 19 ecosystems with migration hints. Free, real-time, queryable via API.",
+  alternates: { canonical: "https://depscope.dev/explore/breaking" },
+};
 import BreakingClient, { type ChangeRow } from "./BreakingClient";
 
 export const revalidate = 1800;

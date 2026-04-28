@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalLayout, Sec, Strong, A } from "../../components/legal/LegalLayout";
 
 export const metadata: Metadata = {
-  title: "Terms of Service — DepScope",
+  title: "Terms of Service",
   description:
     "Terms governing your use of the DepScope API, dashboard, and MCP server. Free tier, paid tiers, acceptable use, liability.",
   alternates: {

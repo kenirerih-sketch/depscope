@@ -195,7 +195,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const data = await fetchPackage(ecosystem, pkg);
 
   if (!data) {
-    return { title: `${pkg} — Not Found | DepScope` };
+    return { title: `${pkg} — Not Found` };
   }
 
   const score = data?.health?.score ?? 0;
@@ -206,7 +206,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     rec.action === "update_required" ? "Update required" :
     rec.action === "find_alternative" ? "Find alternative" : "Use with caution";
 
-  const title = `${pkg} — Health Score ${score}/100 | DepScope`;
+  const title = `${pkg} — Health Score ${score}/100`;
   const description = `${pkg} ${data.latest_version} for ${ecosystem}: health score ${score}/100, ${vulnCount} vulnerabilit${vulnCount === 1 ? "y" : "ies"}. ${safeText}. Checked by DepScope.`;
 
   return {

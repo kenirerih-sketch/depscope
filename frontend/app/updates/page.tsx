@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Card, CardBody, PageHeader, Section, Footer, Badge } from "../../components/ui";
 
 export const metadata: Metadata = {
-  title: "Changelog & Updates — DepScope",
+  title: "Changelog & Updates",
   description:
     "Release notes, new features, and infrastructure updates for DepScope. Follow the evolution of the free Package Intelligence API for AI agents.",
   openGraph: {

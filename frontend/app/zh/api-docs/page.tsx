@@ -1,7 +1,7 @@
 
 import type { Metadata } from "next";
 export const metadata: Metadata = {
-  title: "API文档 | DepScope",
+  title: "API文档",
   alternates: { canonical: "https://depscope.dev/zh/api-docs" },
 };
 

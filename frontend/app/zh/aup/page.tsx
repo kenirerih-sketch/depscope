@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { LegalLayoutZh, Sec, Strong, A } from "../../../components/legal/LegalLayoutZh";
 
 export const metadata: Metadata = {
-  title: "可接受使用政策 — DepScope",
+  title: "可接受使用政策",
   description: "使用 DepScope API、仪表板和 MCP 服务器时允许和禁止的行为。",
   alternates: {
     canonical: "https://depscope.dev/zh/aup",

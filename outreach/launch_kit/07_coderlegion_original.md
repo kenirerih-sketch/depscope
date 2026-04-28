@@ -81,7 +81,7 @@ Fourteen MCP tools registered automatically. The ones that matter in day-to-day 
 | `search_packages` | "I need a library for X" |
 | `scan_project` | Audit all deps in one shot |
 
-Works across **17 ecosystems**: npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew.
+Works across **19 ecosystems**: npm, PyPI, Cargo, Go, Maven, NuGet, RubyGems, Composer, Pub, Hex, Swift, CocoaPods, CPAN, Hackage, CRAN, Conda, Homebrew.
 
 ---
 

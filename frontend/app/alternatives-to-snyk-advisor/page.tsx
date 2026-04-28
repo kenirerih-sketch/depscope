@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   alternates: { canonical: "https://depscope.dev/alternatives-to-snyk-advisor" },
   robots: { index: true, follow: true },
   openGraph: {
-    title: "Snyk Advisor Alternative — DepScope",
+    title: "Snyk Advisor Alternative",
     description: "Free package health scores with a public API. 19 ecosystems.",
     url: "https://depscope.dev/alternatives-to-snyk-advisor",
     siteName: "DepScope",
