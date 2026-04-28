@@ -1,12 +1,12 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "io.github.cuttalo/depscope",
-  "description": "Package Intelligence for AI agents \u2014 22 tools across 19 ecosystems (npm, pypi, cargo, go, maven, nuget, rubygems, composer, pub, hex, swift, cocoapods, cpan, hackage, cran, conda, homebrew). Check health, vulnerabilities (OSV + CISA KEV + EPSS), typosquats, malicious flags, alternatives, known bugs, breaking changes, stack compatibility and error-to-fix. 749k+ packages, 17,290 CVEs. Zero auth, MIT.",
+  "description": "Saves tokens, energy & blocks unsafe packages \u2014 22 tools, 19 ecosystems, 908k+ pkgs, MIT.",
   "repository": {
     "url": "https://github.com/cuttalo/depscope",
     "source": "github"
   },
-  "version": "0.7.0",
+  "version": "0.7.1",
   "websiteUrl": "https://depscope.dev",
   "packages": [
     {
