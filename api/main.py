@@ -4297,7 +4297,14 @@ async def compare_packages(ecosystem: str, packages_csv: str, request: Request =
             "deprecated": result["metadata"]["deprecated"],
             "maintainers_count": result["metadata"]["maintainers_count"],
             "dependencies_count": result["metadata"]["dependencies_count"],
-            "recommendation": result["recommendation"]["action"],
+            "recommendation": (
+                result.get("version_scoped", {}).get("recommendation", {}).get("action")
+                or result["recommendation"]["action"]
+            ),
+            "historical_compromise": (
+                bool(result.get("historical_compromise"))
+                if result.get("historical_compromise") else False
+            ),
         })
 
     # Sort by health score descending
@@ -4492,9 +4499,22 @@ async def scan_dependencies(request: Request):
     if len(packages) > 100:
         raise HTTPException(400, "Max 100 packages per scan")
 
-    # Fetch all in parallel
+    # Fetch all in parallel — honor pinned versions when present
     names = list(packages.keys())
-    tasks = [_fetch_full_package(ecosystem, name) for name in names]
+    def _clean_pinned(v):
+        # Extract bare version from constraints like "^4.0.0", ">=1.0", "~2.1"
+        import re as _re
+        if not v or not isinstance(v, str):
+            return None
+        s = v.strip()
+        if not s or s in ("latest", "*", "x", "any"):
+            return None
+        m = _re.search(r"\d+\.\d+(\.\d+)?", s)
+        return m.group(0) if m else None
+    tasks = []
+    for name in names:
+        pinned = _clean_pinned(packages.get(name))
+        tasks.append(_fetch_full_package(ecosystem, name, requested_version=pinned))
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
     # Bug 4a fix: _fetch_full_package has a 3s per-subtask timeout.

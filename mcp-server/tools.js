@@ -551,7 +551,20 @@ async function postJson(path, body, toolName) {
 }
 
 function encodePkg(pkg) {
+  if (!pkg || typeof pkg !== "string") {
+    throw new Error("required argument 'package' is missing or not a string");
+  }
   return pkg.split("/").map(encodeURIComponent).join("/");
+}
+
+function requireArgs(args, names) {
+  if (!args || typeof args !== "object") {
+    throw new Error(`required arguments missing: ${names.join(", ")}`);
+  }
+  const missing = names.filter(n => !args[n] || (typeof args[n] === "string" && !args[n].trim()));
+  if (missing.length > 0) {
+    throw new Error(`required argument(s) missing or empty: ${missing.join(", ")}`);
+  }
 }
 
 function ok(data) {
@@ -569,6 +582,16 @@ export async function handleToolCall(name, args) {
   const gT = (path) => getText(path, name);
   const pJ = (path, body) => postJson(path, body, name);
   try {
+    // Validate common required args for tools that need ecosystem+package
+    const _eco_pkg_tools = new Set([
+      "check_package", "get_health_score", "get_vulnerabilities", "get_latest_version",
+      "package_exists", "get_package_prompt", "ai_brief", "find_alternatives",
+      "get_breaking_changes", "get_known_bugs", "check_malicious", "check_typosquat",
+      "get_trust_signals", "install_command", "pin_safe",
+    ]);
+    if (_eco_pkg_tools.has(name)) {
+      requireArgs(args, ["ecosystem", "package"]);
+    }
     switch (name) {
       // Back-compat alias: ai_brief was merged into get_package_prompt.
       case "ai_brief":
