@@ -2985,6 +2985,41 @@ async def check_typosquat(ecosystem: str, package: str):
             ORDER BY distance, downloads_legit DESC
         """, ecosystem, package)
         source = "precomputed"
+        cross_match = None
+        # 1.5) BEFORE in-eco fuzzy search, check if name exists EXACTLY in
+        # another ecosystem. If so, the user likely queried wrong registry.
+        # Don't flag as typosquat — return informative cross-eco hint.
+        if not rows:
+            in_eco = await conn.fetchrow("""
+                SELECT 1 FROM packages WHERE ecosystem=$1 AND LOWER(name)=LOWER($2) LIMIT 1
+            """, ecosystem, package)
+            if not in_eco:
+                xeco_match = await conn.fetch("""
+                    SELECT ecosystem, name, downloads_weekly
+                    FROM packages
+                    WHERE LOWER(name)=LOWER($1) AND ecosystem <> $2
+                    ORDER BY downloads_weekly DESC NULLS LAST
+                    LIMIT 5
+                """, package, ecosystem)
+                if xeco_match:
+                    cross_match = [
+                        {"ecosystem": r["ecosystem"], "name": r["name"],
+                         "downloads_weekly": r["downloads_weekly"] or 0}
+                        for r in xeco_match
+                    ]
+                    return {
+                        "package": package,
+                        "ecosystem": ecosystem,
+                        "is_suspected_typosquat": False,
+                        "wrong_ecosystem": True,
+                        "exists_in_ecosystems": cross_match,
+                        "hint": (
+                            f"'{package}' does not exist in '{ecosystem}' but does exist in: "
+                            + ", ".join(f"{m['ecosystem']} ({m['downloads_weekly']:,} weekly)" for m in cross_match)
+                            + ". Did you mean to query the right ecosystem?"
+                        ),
+                        "targets": [],
+                    }
         # 2) Runtime fallback: Levenshtein distance vs. top packages in same ecosystem
         if not rows:
             fallback = await conn.fetch("""
