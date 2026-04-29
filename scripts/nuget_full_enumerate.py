@@ -22,7 +22,7 @@ async def enumerate_nuget(session, max_packages=TARGET):
     """Pull most-recent N package names from NuGet catalog."""
     log.info("Fetching catalog index...")
     async with session.get("https://api.nuget.org/v3/catalog0/index.json", timeout=aiohttp.ClientTimeout(total=20)) as r:
-        idx = await r.json()
+        idx = await r.json(content_type=None)
     items = idx.get("items", [])
     # Use most-recent pages first (last items in list)
     items.sort(key=lambda x: x.get("commitTimeStamp", ""), reverse=True)
@@ -36,7 +36,7 @@ async def enumerate_nuget(session, max_packages=TARGET):
             async with session.get(page["@id"], timeout=aiohttp.ClientTimeout(total=20)) as r:
                 if r.status != 200:
                     continue
-                p = await r.json()
+                p = await r.json(content_type=None)
                 for entry in p.get("items", []):
                     pkg_id = entry.get("nuget:id")
                     if pkg_id and pkg_id.lower() not in seen:
