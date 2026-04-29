@@ -355,6 +355,30 @@ def _parse_lockfile(content: str, kind: str) -> tuple[dict, str]:
     kind = (kind or "").lower().strip()
     content = content.strip()
 
+    # Normalize short names to canonical kinds
+    KIND_ALIASES = {
+        "package-lock":  "package-lock.json",
+        "package_lock":  "package-lock.json",
+        "npm":           "package-lock.json",
+        "pipfile":       "Pipfile.lock",
+        "pipfile-lock":  "Pipfile.lock",
+        "pnpm":          "pnpm-lock.yaml",
+        "pnpm-lock":     "pnpm-lock.yaml",
+        "cargo":         "Cargo.lock",
+        "rust":          "Cargo.lock",
+        "poetry":        "poetry.lock",
+        "composer":      "composer.lock",
+        "php":           "composer.lock",
+        "requirements":  "requirements.txt",
+        "pip":           "requirements.txt",
+        "python":        "requirements.txt",
+        "yarn":          "yarn.lock",
+        "go":            "go.sum",
+        "gosum":         "go.sum",
+    }
+    if kind in KIND_ALIASES:
+        kind = KIND_ALIASES[kind]
+
     # Auto-detect from content
     if not kind:
         if content.startswith("{") and '"lockfileVersion"' in content[:500]:
@@ -1902,6 +1926,62 @@ def _ai_brief_text(payload: dict) -> str:
 # to apply, not just a suggestion. Populated from curated high-impact migrations.
 # ============================================================================
 
+
+
+
+@app.get("/.well-known/dnt-policy.txt", include_in_schema=False)
+async def dnt_policy_txt():
+    """EFF Do Not Track Compliance Policy 1.0.
+
+    Signals to crawlers/agents that DepScope honors DNT and treats
+    user data with care — useful for AI bot ranking + privacy-aware
+    user trust.
+    """
+    body = """DNT Policy 1.0
+
+This is a Do Not Track compliance policy. By posting this policy at
+https://depscope.dev/.well-known/dnt-policy.txt, this site agrees to
+honor Do Not Track (DNT) signals from web browsers as described below.
+
+PRINCIPLE 1 — RESPECT DNT
+When DepScope receives an HTTP request with a Do Not Track header
+(DNT: 1), DepScope will not collect or retain any data that uniquely
+identifies the user beyond what is strictly necessary to fulfill the
+request, and will discard such data within 10 days of collection
+unless retention is required by law.
+
+PRINCIPLE 2 — NO PROFILING
+DepScope will not build behavioral profiles, link queries to a unique
+user identifier, or share information that could be used to track DNT
+users with third parties.
+
+PRINCIPLE 3 — DATA HASHED OR DISCARDED
+DepScope hashes IP addresses (SHA-256, no salt persistence) and stores
+only first-octet country codes. Aggregate analytics (counts per
+ecosystem, per endpoint) are non-identifying and exempt.
+
+PRINCIPLE 4 — EXCEPTIONS, NARROWLY SCOPED
+The following data may be retained even when DNT is set:
+  (a) anonymized request logs for debugging (max 7 days, no IP);
+  (b) abuse mitigation data, only when there is a credible threat;
+  (c) data the user voluntarily provides (e.g. /api/contact form).
+
+PRINCIPLE 5 — NO TRANSFER WITHOUT EQUIVALENT POLICY
+Third-party services contracted by DepScope must publish an
+equivalent DNT policy, or DepScope will not transfer DNT-flagged
+user data to them.
+
+CONTACT
+Privacy questions:        privacy@depscope.dev
+Security disclosures:     security@depscope.dev
+Policy revisions:         https://depscope.dev/.well-known/dnt-policy.txt
+
+VERSION
+1.0 — published 2026-04-29.
+"""
+    return PlainTextResponse(body, headers={
+        "Cache-Control": "public, max-age=86400",
+    })
 
 @app.get("/api/migration/{ecosystem}/{from_pkg}/{to_pkg}", tags=["ai"])
 async def get_migration_path(ecosystem: str, from_pkg: str, to_pkg: str):
@@ -3580,11 +3660,14 @@ async def get_licenses_endpoint(ecosystem: str, package: str):
 # --------------------------------------------------------------------------- #
 
 @app.get("/api/error", tags=["errors"])
-async def search_error(q: str, limit: int = 5):
-    """Search the error database by message (full-text + exact hash)."""
-    q = (q or "").strip()
+async def search_error(q: str = "", code: str = "", limit: int = 5):
+    """Search the error database by message (full-text + exact hash).
+
+    Accepts ?q= (canonical) or ?code= (doc alias).
+    """
+    q = (q or code or "").strip()
     if not q:
-        raise HTTPException(400, "Query parameter 'q' is required")
+        raise HTTPException(400, "Query parameter 'q' (or 'code') is required")
     limit = max(1, min(int(limit or 5), 50))
 
     cache_key = f"err:search:{limit}:{q}"
@@ -3616,10 +3699,11 @@ async def resolve_error(request: Request):
         body = await request.json()
     except Exception:
         raise HTTPException(400, "Invalid JSON body")
-    error_text = (body or {}).get("error", "") or ""
+    # Accept both 'error' (canonical) and 'stack_trace' (doc alias)
+    error_text = (body or {}).get("error") or (body or {}).get("stack_trace") or ""
     context = (body or {}).get("context") or {}
     if not error_text.strip():
-        raise HTTPException(400, "Field 'error' is required")
+        raise HTTPException(400, "Field 'error' (or 'stack_trace') is required")
 
     from api.verticals import (
         normalize_error, hash_error_pattern,
@@ -3754,11 +3838,14 @@ async def get_error(error_hash: str):
 
 
 @app.get("/api/compat", tags=["compat"])
-async def check_compatibility(stack: str):
-    """Check compatibility for a stack like 'next@16,react@19,prisma@6'."""
-    stack = (stack or "").strip()
+async def check_compatibility(stack: str = "", packages: str = ""):
+    """Check compatibility for a stack like 'next@16,react@19,prisma@6'.
+
+    Accepts either ?stack= (canonical) or ?packages= (doc alias).
+    """
+    stack = (stack or packages or "").strip()
     if not stack:
-        raise HTTPException(400, "Query parameter 'stack' is required")
+        raise HTTPException(400, "Query parameter 'stack' (or 'packages') is required")
 
     packages: dict[str, str] = {}
     for part in stack.split(","):
@@ -4213,6 +4300,24 @@ async def scan_dependencies(request: Request):
     lockfile_content = body.get("lockfile")
     lockfile_kind = body.get("lockfile_kind")
     packages = body.get("packages", {}) or {}
+    # Accept both dict {name: version} (canonical) and array [{name, version}] (LLM-friendly)
+    if isinstance(packages, list):
+        coerced = {}
+        for item in packages:
+            if isinstance(item, dict):
+                n = item.get("name")
+                v = item.get("version") or item.get("constraint") or "*"
+                if n:
+                    coerced[n] = v
+            elif isinstance(item, str):
+                # "name@version" syntax
+                if "@" in item:
+                    n, _, v = item.rpartition("@")
+                    if n:
+                        coerced[n] = v or "*"
+                else:
+                    coerced[item] = "*"
+        packages = coerced
     ecosystem = (body.get("ecosystem") or "npm").lower()
 
     if lockfile_content and not packages:

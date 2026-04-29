@@ -706,9 +706,30 @@ export async function handleToolCall(name, args) {
       }
       case "check_compatibility": {
         let pkgs = args.packages;
-        if (typeof pkgs === "string") { try { pkgs = JSON.parse(pkgs); } catch {} }
+        // Accept multiple input shapes:
+        //  - object: {"next":"16","react":"19"} (canonical)
+        //  - JSON string: "{\"next\":\"16\"}"
+        //  - dep-syntax string: "next@16,react@19" (LLM-friendly)
+        if (typeof pkgs === "string") {
+          // Try JSON first
+          try { pkgs = JSON.parse(pkgs); } catch {
+            // Fall back to dep-syntax parser
+            const obj = {};
+            for (const part of pkgs.split(",")) {
+              const trimmed = part.trim();
+              if (!trimmed) continue;
+              const idx = trimmed.lastIndexOf("@");
+              if (idx > 0) {
+                const name = trimmed.slice(0, idx).trim();
+                const ver = trimmed.slice(idx + 1).trim();
+                if (name && ver) obj[name] = ver;
+              }
+            }
+            pkgs = obj;
+          }
+        }
         if (!pkgs || typeof pkgs !== "object" || Array.isArray(pkgs) || Object.keys(pkgs).length === 0) {
-          return fail("\"packages\" must be a non-empty object, e.g. {\"next\":\"16\",\"react\":\"19\"}");
+          return fail("\"packages\" must be {\"next\":\"16\",\"react\":\"19\"} OR \"next@16,react@19\"");
         }
         return ok(await pJ("/api/compat", { packages: pkgs }));
       }
