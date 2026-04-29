@@ -1,12 +1,12 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "io.github.cuttalo/depscope",
-  "description": "Saves tokens, energy & blocks unsafe packages \u2014 22 tools, 19 ecosystems, 908k+ pkgs, MIT.",
+  "description": "Saves tokens, energy & blocks unsafe packages \u2014 22 tools, 19 ecosystems, 965k+ pkgs, MIT.",
   "repository": {
     "url": "https://github.com/cuttalo/depscope",
     "source": "github"
   },
-  "version": "0.7.1",
+  "version": "0.7.2",
   "websiteUrl": "https://depscope.dev",
   "packages": [
     {
