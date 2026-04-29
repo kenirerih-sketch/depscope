@@ -7605,15 +7605,32 @@ def _make_badge_mini(score: str, color: str) -> str:
 
 @app.get("/api/savings", tags=["public"])
 async def get_savings():
-    """Real-time token and energy savings calculator based on actual API calls."""
+    """Real-time token and energy savings calculator based on actual API calls.
+
+    Counts agent + SDK + browser + curl traffic but excludes pure crawlers
+    (apple_bot, gpt_bot, claude_bot, google_bot etc) — those don't represent
+    actual agents who would otherwise have done an LLM round-trip.
+    """
     pool = await get_pool()
     async with pool.acquire() as conn:
-        # Chiamate reali (no bot, no cron)
+        # Real agent/SDK/dev traffic. Exclude pure crawlers (their UA is
+        # classified into agent_client like 'applebot', 'gptbot', 'claudebot',
+        # 'googlebot', 'amazonbot', 'meta-externalagent' etc).
+        crawler_buckets = (
+            "applebot", "gptbot", "claudebot", "googlebot", "amazonbot",
+            "yandexbot", "bingbot", "ahrefsbot", "semrushbot", "ccbot",
+            "bytespider", "perplexitybot", "duckduckbot", "diffbot",
+            "facebookexternalhit", "meta-externalagent", "twitterbot",
+            "linkedinbot", "openai-bot",
+        )
         total_real = await conn.fetchval(
-            "SELECT COUNT(*) FROM api_usage_public WHERE user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent NOT ILIKE '%spider%' AND user_agent NOT ILIKE '%GoogleOther%' AND user_agent != ''"
+            "SELECT COUNT(*) FROM api_usage_public "
+            "WHERE COALESCE(agent_client,'') NOT IN ('applebot','gptbot','claudebot','googlebot','amazonbot','yandexbot','bingbot','ahrefsbot','semrushbot','ccbot','bytespider','perplexitybot','duckduckbot','diffbot','facebookexternalhit','meta-externalagent','twitterbot','linkedinbot','openai-bot')"
         )
         today_real = await conn.fetchval(
-            "SELECT COUNT(*) FROM api_usage_public WHERE created_at > CURRENT_DATE AND user_agent NOT ILIKE '%node%' AND user_agent NOT ILIKE '%bot%' AND user_agent NOT ILIKE '%crawl%' AND user_agent NOT ILIKE '%spider%' AND user_agent NOT ILIKE '%GoogleOther%' AND user_agent != ''"
+            "SELECT COUNT(*) FROM api_usage_public "
+            "WHERE created_at > CURRENT_DATE "
+            "AND COALESCE(agent_client,'') NOT IN ('applebot','gptbot','claudebot','googlebot','amazonbot','yandexbot','bingbot','ahrefsbot','semrushbot','ccbot','bytespider','perplexitybot','duckduckbot','diffbot','facebookexternalhit','meta-externalagent','twitterbot','linkedinbot','openai-bot')"
         )
 
     tokens_without = 8500
