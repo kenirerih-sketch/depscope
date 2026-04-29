@@ -180,7 +180,7 @@ def republish_mcp_registry():
 
 def ping_indexnow(urls):
     """Ping IndexNow API (Bing + Yandex)."""
-    KEY = "depscopeindexnow7841"  # placeholder; should match /KEY.txt on site
+    KEY = "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9"  # placeholder; should match /KEY.txt on site
     body = json.dumps({
         "host": "depscope.dev",
         "key": KEY,

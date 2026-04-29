@@ -1607,6 +1607,31 @@ async def _fetch_full_package(ecosystem: str, package: str, requested_version: s
                 {**pkg_data, "latest_version": requested_version},
                 scoped_health, scoped_vulns,
             )
+
+            # PATCH version_too_old: detect 3+ majors behind latest as legacy/risky
+            try:
+                def _major(v: str) -> int | None:
+                    if not v: return None
+                    s = str(v).lstrip("v").split("-")[0].split("+")[0]
+                    head = s.split(".")[0]
+                    return int(head) if head.isdigit() else None
+                req_maj = _major(requested_version)
+                latest_maj = _major(pkg_data.get("latest_version", ""))
+                if req_maj is not None and latest_maj is not None and (latest_maj - req_maj) >= 3:
+                    scoped_recommendation = {
+                        **(scoped_recommendation or {}),
+                        "action": "do_not_use",
+                        "summary": (
+                            f"{package}@{requested_version} is {latest_maj - req_maj} major "
+                            f"versions behind latest ({pkg_data.get('latest_version')}). "
+                            f"Likely EOL — known CVEs may not be filterable from old advisories. "
+                            f"Upgrade or treat as unsafe."
+                        ),
+                        "version_too_old": True,
+                        "majors_behind": latest_maj - req_maj,
+                    }
+            except Exception:
+                pass
         except Exception:
             scoped_vulns = None
             scoped_recommendation = None
