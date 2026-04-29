@@ -2638,6 +2638,54 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
                     "url": f"/api/alternatives/{ecosystem}/{package}",
                     "count": alt_row["cnt"],
                 }
+
+            # Co-used with: which packages does the community pair this one with?
+            cooccur_rows = await conn.fetch("""
+                SELECT
+                    CASE WHEN LOWER(package_a)=LOWER($2) THEN package_b ELSE package_a END AS partner,
+                    cooccurrence_count
+                FROM package_cooccurrence
+                WHERE ecosystem=$1
+                  AND (LOWER(package_a)=LOWER($2) OR LOWER(package_b)=LOWER($2))
+                ORDER BY cooccurrence_count DESC
+                LIMIT 5
+            """, ecosystem, package)
+            if cooccur_rows:
+                result["co_used_with"] = [
+                    {"package": r["partner"], "occurrences": r["cooccurrence_count"]}
+                    for r in cooccur_rows
+                ]
+
+            # Version history: from data_json->versions array (versions table empty)
+            ver_data = await conn.fetchrow("""
+                SELECT
+                    COALESCE(jsonb_array_length(data_json->'versions'), 0) AS total_versions,
+                    last_published, first_published
+                FROM packages
+                WHERE ecosystem=$1 AND LOWER(name)=LOWER($2)
+            """, ecosystem, package)
+            if ver_data and ver_data["total_versions"] > 0:
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                last_rel = ver_data["last_published"]
+                first_rel = ver_data["first_published"]
+                days_since = (now - last_rel).days if last_rel else None
+                age_days = (now - first_rel).days if first_rel else None
+                cadence = None
+                if age_days and age_days > 0 and ver_data["total_versions"] > 1:
+                    cadence = round(age_days / max(ver_data["total_versions"] - 1, 1))
+                result["version_history_summary"] = {
+                    "total_versions": ver_data["total_versions"],
+                    "first_release_age_days": age_days,
+                    "last_release_days_ago": days_since,
+                    "avg_days_between_releases": cadence,
+                    "release_velocity": (
+                        "active" if days_since is not None and days_since < 90
+                        else "moderate" if days_since is not None and days_since < 365
+                        else "stale" if days_since is not None and days_since >= 365
+                        else "unknown"
+                    ),
+                }
     except Exception:
         pass
 
