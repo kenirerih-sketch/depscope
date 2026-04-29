@@ -2440,6 +2440,25 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
         except Exception:
             pass
 
+        # Cross-ecosystem hint: does the same name exist (more popular) elsewhere?
+        xeco_hits = []
+        try:
+            async with (await get_pool()).acquire() as conn:
+                xeco_rows = await conn.fetch("""
+                    SELECT ecosystem, name, downloads_weekly
+                    FROM packages
+                    WHERE LOWER(name)=LOWER($1) AND ecosystem <> $2
+                    ORDER BY downloads_weekly DESC NULLS LAST
+                    LIMIT 5
+                """, package, ecosystem)
+                xeco_hits = [
+                    {"ecosystem": r["ecosystem"], "name": r["name"],
+                     "downloads_weekly": r["downloads_weekly"] or 0}
+                    for r in xeco_rows
+                ]
+        except Exception:
+            pass
+
         detail = {
             "error": "package_not_found",
             "ecosystem": ecosystem,
@@ -2447,6 +2466,15 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
             "did_you_mean": did_you_mean,
             "message": f"Package '{package}' not found in {ecosystem}.",
         }
+        if xeco_hits:
+            detail["wrong_ecosystem"] = True
+            detail["exists_in_ecosystems"] = xeco_hits
+            top = xeco_hits[0]
+            detail["hint"] = (
+                f"'{package}' does not exist in '{ecosystem}' but exists in "
+                f"'{top['ecosystem']}' ({top['downloads_weekly']:,} weekly downloads). "
+                f"Try: /api/check/{top['ecosystem']}/{package}"
+            )
         if did_you_mean:
             detail["hint"] = (
                 "Top fuzzy matches above. Pick the closest, or this may be "
@@ -2560,6 +2588,41 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
             result = await _augment_check(conn, ecosystem, package, result)
     except Exception:
         pass
+
+    # Cross-ecosystem popularity check: if THIS package has low popularity AND
+    # the same name exists in another ecosystem with 100x+ downloads, warn the
+    # agent — likely the user queried the wrong registry.
+    try:
+        my_dl = (result.get("downloads_weekly") or 0)
+        if my_dl < 100_000:
+            async with (await get_pool()).acquire() as conn:
+                xeco = await conn.fetchrow("""
+                    SELECT ecosystem, downloads_weekly
+                    FROM packages
+                    WHERE LOWER(name)=LOWER($1)
+                      AND ecosystem <> $2
+                      AND downloads_weekly > GREATEST($3 * 100, 100000)
+                    ORDER BY downloads_weekly DESC NULLS LAST
+                    LIMIT 1
+                """, package, ecosystem, my_dl)
+                if xeco:
+                    result["popularity_warning"] = {
+                        "this_ecosystem_downloads": my_dl,
+                        "more_popular_in": {
+                            "ecosystem": xeco["ecosystem"],
+                            "downloads_weekly": xeco["downloads_weekly"] or 0,
+                        },
+                        "hint": (
+                            f"This is the {ecosystem} package '{package}' "
+                            f"({my_dl:,} dl/week). A much more popular package with the same "
+                            f"name exists in {xeco['ecosystem']} "
+                            f"({xeco['downloads_weekly']:,} dl/week). "
+                            f"Confirm you queried the right ecosystem."
+                        ),
+                    }
+    except Exception:
+        pass
+
     # 6h TTL — metadata stable day-to-day; daily cron refreshes downloads/vulns.
     await cache_set(cache_key, result, ttl=21600)
     _log_usage(ecosystem, package, request,
