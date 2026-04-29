@@ -2589,6 +2589,33 @@ async def check_package(ecosystem: str, package: str, version: str = None, reque
     except Exception:
         pass
 
+    # Discoverability links: tell the agent where to drill deeper
+    try:
+        async with (await get_pool()).acquire() as conn:
+            br_row = await conn.fetchrow("""
+                SELECT COUNT(*) AS cnt FROM breaking_changes bc
+                JOIN packages p ON p.id = bc.package_id
+                WHERE p.ecosystem=$1 AND LOWER(p.name)=LOWER($2)
+            """, ecosystem, package)
+            if br_row and br_row["cnt"] > 0:
+                result["breaking_changes_link"] = {
+                    "url": f"/api/breaking/{ecosystem}/{package}",
+                    "count": br_row["cnt"],
+                    "hint": "Use this endpoint to get version-pair breaking changes + migration hints.",
+                }
+            alt_row = await conn.fetchrow("""
+                SELECT COUNT(*) AS cnt FROM alternatives a
+                JOIN packages p ON p.id = a.package_id
+                WHERE p.ecosystem=$1 AND LOWER(p.name)=LOWER($2)
+            """, ecosystem, package)
+            if alt_row and alt_row["cnt"] > 0:
+                result["alternatives_link"] = {
+                    "url": f"/api/alternatives/{ecosystem}/{package}",
+                    "count": alt_row["cnt"],
+                }
+    except Exception:
+        pass
+
     # Cross-ecosystem popularity check: if THIS package has low popularity AND
     # the same name exists in another ecosystem with 100x+ downloads, warn the
     # agent — likely the user queried the wrong registry.
@@ -6886,12 +6913,13 @@ async def contact_types():
 @app.get("/api/now", tags=["public"])
 async def get_current_time():
     """
-    Current UTC time. Agents don't know what time it is.
-    Also returns useful context: day of week, unix timestamp.
+    Current UTC time + live snapshot of DepScope state.
+    Agents don't know what time it is or how fresh our data is — this gives
+    them everything in one cheap call.
     """
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc)
-    return {
+    payload = {
         "utc": now.isoformat(),
         "unix": int(now.timestamp()),
         "date": now.strftime("%Y-%m-%d"),
@@ -6899,6 +6927,28 @@ async def get_current_time():
         "day": now.strftime("%A"),
         "timezone": "UTC",
     }
+    # Live snapshot — single cheap query, all from indexed columns
+    try:
+        pool = await get_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow("""
+                SELECT
+                    (SELECT COUNT(*) FROM packages) AS pkgs,
+                    (SELECT COUNT(*) FROM vulnerabilities) AS vulns,
+                    (SELECT COUNT(DISTINCT ecosystem) FROM packages) AS eco_count,
+                    (SELECT MAX(updated_at) FROM packages) AS last_pkg_update,
+                    (SELECT MAX(updated_at) FROM vulnerabilities) AS last_vuln_update
+            """)
+            payload["snapshot"] = {
+                "packages_indexed": row["pkgs"],
+                "vulnerabilities_tracked": row["vulns"],
+                "ecosystems": row["eco_count"],
+                "last_package_update": row["last_pkg_update"].isoformat() if row["last_pkg_update"] else None,
+                "last_vulnerability_update": row["last_vuln_update"].isoformat() if row["last_vuln_update"] else None,
+            }
+    except Exception:
+        pass  # silent — clock still returns even if DB unavailable
+    return payload
 
 
 @app.get("/api/health", tags=["public"])
@@ -8351,6 +8401,56 @@ async def intelligence_dashboard(request: Request):
         "trending_packages": [dict(r) for r in trending],
         "top_errors": [dict(r) for r in error_searches],
     }
+
+
+@app.get("/api/popular", tags=["discover"])
+async def public_popular(ecosystem: str = None, limit: int = 20):
+    """Top packages by raw popularity (downloads_weekly).
+
+    Different from /api/trending (which is search-volume-based). Use this
+    when you need 'the most-downloaded React libraries' rather than 'the
+    packages everyone is asking about right now'.
+    """
+    from datetime import datetime as _dt
+    limit = max(1, min(int(limit or 20), 100))
+    eco = (ecosystem or "").strip().lower() or None
+    cache_key = f"popular:{eco or 'all'}:{limit}"
+    cached = await cache_get(cache_key)
+    if cached:
+        return cached
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        if eco:
+            rows = await conn.fetch("""
+                SELECT ecosystem, name, latest_version, health_score,
+                       downloads_weekly, license, deprecated
+                FROM packages
+                WHERE ecosystem=$1
+                  AND downloads_weekly > 0
+                  AND name ~ '^[a-zA-Z0-9_@-][a-zA-Z0-9._/@-]*[a-zA-Z0-9_]$'
+                  AND length(name) BETWEEN 2 AND 200
+                ORDER BY downloads_weekly DESC NULLS LAST
+                LIMIT $2
+            """, eco, limit)
+        else:
+            rows = await conn.fetch("""
+                SELECT ecosystem, name, latest_version, health_score,
+                       downloads_weekly, license, deprecated
+                FROM packages
+                WHERE downloads_weekly > 0
+                  AND name ~ '^[a-zA-Z0-9_@-][a-zA-Z0-9._/@-]*[a-zA-Z0-9_]$'
+                  AND length(name) BETWEEN 2 AND 200
+                ORDER BY downloads_weekly DESC NULLS LAST
+                LIMIT $1
+            """, limit)
+    result = {
+        "generated_at": _dt.utcnow().isoformat() + "Z",
+        "scope": eco or "all",
+        "ranking_by": "downloads_weekly",
+        "packages": [dict(r) for r in rows],
+    }
+    await cache_set(cache_key, result, ttl=6 * 3600)
+    return result
 
 
 @app.get("/api/trending", tags=["discover"])

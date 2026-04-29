@@ -1,0 +1,41 @@
+DNT Policy 1.0
+
+This is a Do Not Track compliance policy. By posting this policy at
+https://depscope.dev/.well-known/dnt-policy.txt, this site agrees to
+honor Do Not Track (DNT) signals from web browsers as described below.
+
+PRINCIPLE 1 — RESPECT DNT
+When DepScope receives an HTTP request with a Do Not Track header
+(DNT: 1), DepScope will not collect or retain any data that uniquely
+identifies the user beyond what is strictly necessary to fulfill the
+request, and will discard such data within 10 days of collection
+unless retention is required by law.
+
+PRINCIPLE 2 — NO PROFILING
+DepScope will not build behavioral profiles, link queries to a unique
+user identifier, or share information that could be used to track DNT
+users with third parties.
+
+PRINCIPLE 3 — DATA HASHED OR DISCARDED
+DepScope hashes IP addresses (SHA-256, no salt persistence) and stores
+only first-octet country codes. Aggregate analytics (counts per
+ecosystem, per endpoint) are non-identifying and exempt.
+
+PRINCIPLE 4 — EXCEPTIONS, NARROWLY SCOPED
+The following data may be retained even when DNT is set:
+  (a) anonymized request logs for debugging (max 7 days, no IP);
+  (b) abuse mitigation data, only when there is a credible threat;
+  (c) data the user voluntarily provides (e.g. /api/contact form).
+
+PRINCIPLE 5 — NO TRANSFER WITHOUT EQUIVALENT POLICY
+Third-party services contracted by DepScope must publish an
+equivalent DNT policy, or DepScope will not transfer DNT-flagged
+user data to them.
+
+CONTACT
+Privacy questions:        privacy@depscope.dev
+Security disclosures:     security@depscope.dev
+Policy revisions:         https://depscope.dev/.well-known/dnt-policy.txt
+
+VERSION
+1.0 — published 2026-04-29.

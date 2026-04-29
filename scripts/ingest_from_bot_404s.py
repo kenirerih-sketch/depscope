@@ -80,13 +80,33 @@ async def already_in_db(pool, ecosystem: str, name: str) -> bool:
     return r is not None
 
 
-async def ingest_one(pool, ecosystem: str, name: str) -> tuple[bool, str]:
+async def add_to_benchmark_hallucinations(pool, ecosystem: str, name: str, hits: int):
+    """When upstream registry returns 404, the bot was hallucinating. Save it."""
+    try:
+        await pool.execute(
+            """
+            INSERT INTO benchmark_hallucinations
+              (ecosystem, package_name, source, evidence, hit_count)
+            VALUES ($1, $2, 'observed',
+                    'Bot 404 - upstream registry not found ' || $3 || ' hits in 30d', $3)
+            ON CONFLICT (ecosystem, package_name) DO UPDATE
+              SET hit_count = benchmark_hallucinations.hit_count + EXCLUDED.hit_count,
+                  last_seen_at = NOW()
+            """,
+            ecosystem, name, hits,
+        )
+    except Exception as e:
+        pass  # non-blocking
+
+async def ingest_one(pool, ecosystem: str, name: str, hits: int = 1) -> tuple[bool, str]:
     try:
         pkg = await fetch_package(ecosystem, name)
     except Exception as e:
         return False, f"fetch_err: {type(e).__name__}"
     if not pkg:
-        return False, "upstream_not_found"
+        # Hallucination! Add to benchmark corpus
+        await add_to_benchmark_hallucinations(pool, ecosystem, name, hits)
+        return False, "upstream_not_found_added_to_hallu_corpus"
     try:
         vulns = await fetch_vulnerabilities(
             ecosystem, name,
@@ -119,7 +139,7 @@ async def main():
             skipped += 1
             continue
         tried += 1
-        done, reason = await ingest_one(pool, eco, name)
+        done, reason = await ingest_one(pool, eco, name, hits)
         if done:
             ok += 1
             by_eco_ok[eco] = by_eco_ok.get(eco, 0) + 1
