@@ -4630,6 +4630,8 @@ _ECO_META = {
     "cran":      {"label": "CRAN (R)",                    "language": "R",          "registry_url": "https://cran.r-project.org"},
     "conda":     {"label": "Conda (Anaconda)",            "language": "Python/R",   "registry_url": "https://anaconda.org"},
     "homebrew":  {"label": "Homebrew (macOS/Linux tools)", "language": "Shell",     "registry_url": "https://formulae.brew.sh"},
+    "jsr":       {"label": "JSR (Deno/Bun TypeScript)",   "language": "TypeScript", "registry_url": "https://jsr.io"},
+    "julia":     {"label": "Julia General Registry",      "language": "Julia",      "registry_url": "https://juliahub.com"},
 }
 
 
@@ -6626,11 +6628,17 @@ class _ContactRequest(BaseModel):
     email: str
     type: str = "other"
     subject: str
-    body: str
+    body: str = ""             # canonical
+    message: str = ""          # alias for body — accept either
     company: str = ""
     source: str = "web"        # web | cli | mcp | agent | api
     consent: bool = True
     honeypot: str = ""         # bots fill this; humans don't see it
+
+    def model_post_init(self, _ctx):
+        # Accept either 'body' or 'message' as the message text
+        if not self.body and self.message:
+            self.body = self.message
 
 
 
@@ -7007,6 +7015,37 @@ async def search_packages(ecosystem: str, q: str = "", limit: int = 10):
                             "description": c.get("description", ""),
                             "downloads": c.get("downloads", 0),
                         })
+
+    # Enrich with our DB data (health_score, downloads_weekly, vulns_count)
+    # Single batch query keeps this cheap regardless of result count.
+    if results:
+        names = [r.get("name") for r in results if r.get("name")]
+        if names:
+            try:
+                pool = await get_pool()
+                async with pool.acquire() as conn:
+                    enrich_rows = await conn.fetch("""
+                        SELECT name, health_score, downloads_weekly, latest_version,
+                               license, deprecated
+                        FROM packages
+                        WHERE ecosystem=$1 AND LOWER(name) = ANY($2::text[])
+                    """, ecosystem, [n.lower() for n in names])
+                    by_name = {r["name"].lower(): r for r in enrich_rows}
+                    for r in results:
+                        n = (r.get("name") or "").lower()
+                        if n in by_name:
+                            row = by_name[n]
+                            r["health_score"] = row["health_score"]
+                            r["downloads_weekly"] = row["downloads_weekly"]
+                            r["license"] = row["license"]
+                            r["deprecated"] = row["deprecated"]
+                            if not r.get("version"):
+                                r["version"] = row["latest_version"]
+                        else:
+                            r["health_score"] = None
+                            r["downloads_weekly"] = None
+            except Exception:
+                pass  # silent — keep upstream-only results if DB enrichment fails
 
     return {
         "ecosystem": ecosystem,

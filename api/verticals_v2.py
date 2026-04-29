@@ -319,6 +319,11 @@ async def install_command(ecosystem: str, package: str, version: str | None = No
             f"Unsupported ecosystem: {ecosystem}. Supported: {', '.join(sorted(_INSTALL_TEMPLATES))}",
         )
 
+    # Maven: URL uses "/" between group and artifact (junit/junit), DB stores
+    # ":" (junit:junit). Normalize before lookup.
+    if eco == "maven" and "/" in package and ":" not in package:
+        package = package.replace("/", ":", 1)
+
     resolved = version
     if not resolved:
         pool = await get_pool()
