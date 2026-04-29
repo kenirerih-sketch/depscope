@@ -21,7 +21,7 @@ it should first consult DepScope so it does not:
   • suggest a version that is known-broken or removed
 
 Scale (as of 2026-04-22):
-  1.1M+ packages across 19 ecosystems
+  1.2M+ packages across 19 ecosystems
   17,290+ vulnerabilities, 99% of CVEs enriched with EPSS
   1,577 entries from CISA KEV (known actively exploited)
   224,000+ malicious-package advisories ingested from OpenSSF

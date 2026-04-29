@@ -1,9 +1,9 @@
 {
-  "generated_at": "2026-04-29T05:30:01.250589+00:00",
+  "generated_at": "2026-04-29T06:30:01.246005+00:00",
   "generated_date": "2026-04-29",
-  "packages": 1149714,
-  "packages_pretty": "1.1M+",
-  "vulnerabilities": 19256,
+  "packages": 1151685,
+  "packages_pretty": "1.2M+",
+  "vulnerabilities": 19304,
   "vulnerabilities_pretty": "19k+",
   "ecosystems": 19,
   "alternatives": 724,
